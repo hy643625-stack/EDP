@@ -1,0 +1,14 @@
+EveryDayPerfect {VERSION}
+
+这个文件夹是给最终用户使用的，不用于源码开发。
+
+使用方式：
+1. 双击 `EveryDayPerfect-Setup-{VERSION}.exe`
+2. 按安装向导完成安装
+3. 在开始菜单中搜索 `EveryDayPerfect` 并打开
+
+默认数据位置：
+C:\Users\Lenovo\AppData\Local\EveryDayPerfect\task.db
+
+如果你需要把这个版本发给其他人：
+请优先发送工作区 `03-send-package` 目录下的压缩包，不要直接发送源码工程。

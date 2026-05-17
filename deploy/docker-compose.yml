@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    container_name: everydayperfect-backend
+    restart: unless-stopped
+    environment:
+      TASK_DB_PATH: /data/task.db
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${WEB_PORT:-8080}}
+    volumes:
+      - ./data:/data
+    expose:
+      - "18765"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/health', timeout=2)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+        VITE_API_BASE_URL: /api
+    container_name: everydayperfect-web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
