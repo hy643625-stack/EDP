@@ -2,117 +2,177 @@
 
 ## 目标
 
-这份文档用于把当前项目从“本地文件夹管理版本”升级到“GitHub 管理源码版本 + 本地交付安装包”。
+这份文档用于约束 EveryDayPerfect 后续所有版本迭代流程。  
+以后不再采用“临时整理文件夹”的方式，而是统一使用：
 
-管理原则：
+- Git 管理源码
+- GitHub 管理远程版本历史
+- `CHANGELOG.md` 管理版本说明
+- `02-user-software` / `03-send-package` 管理本地交付物
 
-- GitHub 只管理源码、脚本、文档和版本记录。
-- `02-user-software` 和 `03-send-package` 继续作为本地交付目录，不直接纳入仓库。
-- 每次发版都要有：版本号、`CHANGELOG.md`、Git tag、安装包、manifest。
+## 统一原则
 
-## 当前项目的推荐仓库根目录
+- 源码仓库只管理源码、脚本、文档、流程文件。
+- 用户安装包、压缩包、日志、数据库不纳入 Git。
+- 每次发版必须同时具备：
+  - 版本号
+  - `CHANGELOG.md`
+  - Git 提交
+  - Git tag
+  - 安装包
+  - manifest
+
+## 仓库范围
+
+Git 仓库根目录固定为：
 
 ```text
 C:\Users\Lenovo\Desktop\EveryDayPerfect\01-source\EveryDayPerfect
 ```
 
-也就是：只把源码工程放进 Git 仓库，不把桌面工作区的上层目录整体纳入仓库。
+不要把 `C:\Users\Lenovo\Desktop\EveryDayPerfect` 整个工作区直接纳入仓库。
 
-## 分支建议
+## 分支规则
 
-建议先用一套足够简单、便于单人迭代的分支规则：
+当前推荐规则：
 
-- `main`：始终保持可发布状态
-- `feature/*`：功能开发分支
-- `fix/*`：问题修复分支
-- `release/*`：需要时用于发版整理
+- `main`：始终保持可发布
+- `feature/*`：新功能开发
+- `fix/*`：问题修复
+- `release/*`：必要时用于发版整理
 
-如果当前阶段主要是单人开发，也可以只保留 `main`，待流程稳定后再拆分。
+如果当前仍然以单人开发为主，可以长期只使用 `main`，等多人协作后再细分。
 
-## 一次性初始化步骤
+## 标准开发流程
 
-前提：本机已安装 Git，并且命令行可用。
-
-1. 打开源码工程目录
-2. 运行仓库初始化脚本：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\init_git_repo.ps1 -RemoteUrl https://github.com/<你的账号>/<你的仓库>.git -InitialCommit
-```
-
-3. 如果脚本没有自动推送，再执行：
-
-```powershell
-git push -u origin main
-```
-
-## 日常开发流程
+每次日常迭代统一遵循：
 
 ```text
 改代码
--> 本地运行验证
+-> 本地验证
 -> 更新版本号
 -> 更新 CHANGELOG
 -> 跑测试
--> 构建安装包
--> 提交 Git
--> 打 tag
+-> 生成安装包与交付物
+-> Git 提交
+-> Git tag
 -> 推送 GitHub
--> 发送交付包
 ```
 
-推荐命令顺序：
+## 标准发版流程
+
+### 方式一：推荐，使用统一脚本
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\run_standard_release.ps1 -Part patch -Commit -Tag
+```
+
+如果确认本机代码已经准备好，并且希望发版后立即推送到 GitHub：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\run_standard_release.ps1 -Part patch -Commit -Tag -Push
+```
+
+### 方式二：手工执行
 
 ```powershell
 .\set_project_version.ps1 -Part patch
 .\publish_windows_release.ps1
 git add .
-git commit -m "release: v1.0.2"
+git commit -m "release: v1.0.3"
 powershell -ExecutionPolicy Bypass -File .\tools\create_git_release_tag.ps1 -Push
+git push
 ```
 
-## 发版约定
+## 脚本说明
 
-- Git tag 统一使用：`v1.0.2`
-- 提交信息建议：
-  - `feat: ...`
-  - `fix: ...`
-  - `docs: ...`
-  - `release: v1.0.2`
-
-## GitHub Release 建议内容
-
-每次正式发版时，建议在 GitHub Release 中上传：
-
-- `EveryDayPerfect-1.0.2-delivery.zip`
-- `EveryDayPerfect-1.0.2-manifest.json`
-
-Release 描述可直接摘取 `CHANGELOG.md` 对应版本内容。
-
-## 不应该进仓库的内容
-
-- 本地虚拟环境
-- 构建产物
-- 用户数据库
-- 日志
-- AI 本地配置
-- 本地 IDE 配置
-
-这些内容已经通过 `.gitignore` 做了基础排除。
-
-## 当前阻塞点
-
-目前这台机器上还没有可用的 Git 命令，也没有现成的 `.git` 仓库。  
-所以本轮已经先把 GitHub 管理所需的文件结构补齐，下一步只需要：
-
-1. 安装 Git
-2. 创建 GitHub 仓库
-3. 运行 `tools/init_git_repo.ps1`
-
-## 相关文件
-
-- `CHANGELOG.md`
-- `docs/版本迭代记录规范.md`
 - `tools/init_git_repo.ps1`
+  用于初始化本地仓库、配置远程仓库。
+
 - `tools/create_git_release_tag.ps1`
-- `.github/PULL_REQUEST_TEMPLATE.md`
+  用于创建标准版本标签，例如 `v1.0.2`。
+
+- `tools/run_standard_release.ps1`
+  用于执行标准发版流程检查、构建、提交、打标签、推送。
+
+## 发版前强制检查
+
+每次正式发版前必须满足：
+
+1. `CHANGELOG.md` 已写入当前版本号对应条目
+2. 本地工作区没有未确认的脏改动
+3. 前端测试通过
+4. 后端测试通过
+5. 安装包构建成功
+6. `03-send-package` 已生成 zip 与 manifest
+
+如果其中一项不满足，本次版本不允许发给用户。
+
+## Git 标签规范
+
+- 统一格式：`v主版本.次版本.修订号`
+- 示例：
+  - `v1.0.2`
+  - `v1.0.3`
+  - `v1.1.0`
+
+## 提交信息规范
+
+推荐使用：
+
+- `feat: ...`
+- `fix: ...`
+- `docs: ...`
+- `chore: ...`
+- `release: v1.0.3`
+
+## GitHub Release 规范
+
+每次正式发版后，GitHub Release 建议上传：
+
+- `EveryDayPerfect-<版本号>-delivery.zip`
+- `EveryDayPerfect-<版本号>-manifest.json`
+
+Release 说明可直接摘取 `CHANGELOG.md` 中该版本的条目。
+
+## 当前交付目录规范
+
+- 源码：`01-source\EveryDayPerfect`
+- 用户软件目录：`02-user-software\EveryDayPerfect-<版本号>`
+- 对外发送目录：`03-send-package`
+
+## 不纳入 Git 的内容
+
+- `.venv/`
+- `dist/`
+- `build/`
+- `frontend/node_modules/`
+- `*.db`
+- `*.log`
+- `ai-settings.json`
+- 本地运行缓存与测试产物
+
+## GitHub 自动化
+
+仓库内已补充 `.github/workflows/ci.yml`，用于：
+
+- push 到 `main`
+- pull request 到 `main`
+
+自动执行：
+
+- 后端测试
+- 前端测试
+- 前端构建
+
+## 当前仓库状态
+
+当前项目已经：
+
+- 初始化本地 Git 仓库
+- 创建 `main` 分支
+- 绑定 GitHub 仓库
+- 推送远程 `main`
+- 推送标签 `v1.0.2`
+
+后续版本都必须按本文件流程执行。
