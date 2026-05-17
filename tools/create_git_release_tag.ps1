@@ -67,7 +67,8 @@ try {
     throw "This directory is not a git repository: $ROOT_DIR"
   }
 
-  $existingTag = (& $GIT_EXE tag --list $tagName).Trim()
+  $existingTagRaw = & $GIT_EXE tag --list $tagName
+  $existingTag = if ($null -eq $existingTagRaw) { "" } else { "$existingTagRaw".Trim() }
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to list tags."
   }
