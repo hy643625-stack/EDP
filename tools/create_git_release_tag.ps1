@@ -6,43 +6,15 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ROOT_DIR = Split-Path -Parent $PSScriptRoot
+$GIT_COMMON_PATH = Join-Path $PSScriptRoot "git_common.ps1"
 $APP_METADATA_PATH = Join-Path $ROOT_DIR "app_metadata.py"
 $GIT_EXE = $null
 
-function Resolve-GitExe {
-  $command = Get-Command git -ErrorAction SilentlyContinue
-  if ($null -ne $command) {
-    return $command.Source
-  }
-
-  $candidates = @(
-    "C:\Program Files\Git\cmd\git.exe",
-    "C:\Program Files\Git\bin\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe"
-  )
-
-  foreach ($candidate in $candidates) {
-    if (Test-Path $candidate) {
-      return $candidate
-    }
-  }
-
-  throw "Git is not installed or not available in PATH."
+if (-not (Test-Path $GIT_COMMON_PATH)) {
+  throw "Missing helper script: $GIT_COMMON_PATH"
 }
 
-function Invoke-Git {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & $GIT_EXE @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "git command failed: git $($Arguments -join ' ')"
-  }
-}
+. $GIT_COMMON_PATH
 
 $GIT_EXE = Resolve-GitExe
 
@@ -67,7 +39,9 @@ try {
     throw "This directory is not a git repository: $ROOT_DIR"
   }
 
-  $existingTagRaw = & $GIT_EXE tag --list $tagName
+  Ensure-GitSafeDirectory -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR
+
+  $existingTagRaw = & $GIT_EXE -C $ROOT_DIR tag --list $tagName
   $existingTag = if ($null -eq $existingTagRaw) { "" } else { "$existingTagRaw".Trim() }
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to list tags."
@@ -77,16 +51,16 @@ try {
   }
 
   Write-Host "[git] Creating annotated tag $tagName..."
-  Invoke-Git -Arguments @("tag", "-a", $tagName, "-m", "Release $tagName")
+  Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("tag", "-a", $tagName, "-m", "Release $tagName")
 
   if ($Push) {
-    & $GIT_EXE remote get-url origin *> $null
+    & $GIT_EXE -C $ROOT_DIR remote get-url origin *> $null
     if ($LASTEXITCODE -ne 0) {
       throw "Remote origin is not configured. Configure it before using -Push."
     }
 
     Write-Host "[git] Pushing tag to origin..."
-    Invoke-Git -Arguments @("push", "origin", $tagName)
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("push", "origin", $tagName)
   }
 
   Write-Host "[ok] Release tag created: $tagName"

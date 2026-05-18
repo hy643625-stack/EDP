@@ -34,3 +34,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 - 版本记录：`CHANGELOG.md`
 - 迭代规范：`docs/版本迭代记录规范.md`
 - Windows 打包：`build_windows_installer.ps1`
+
+## 开发与版本管理
+- 日常开发流程：`docs/标准开发流程.md`
+- GitHub 版本管理：`docs/GitHub版本管理流程.md`
+- 开发交接：`docs/开发交接手册.md`
+
+当前仓库的 Git 脚本会自动处理 `safe.directory` 注册。  
+如果在命令行里手工执行 Git 时看到 `detected dubious ownership`，请先执行：
+
+```powershell
+git config --global --add safe.directory C:\Users\Lenovo\Desktop\EveryDayPerfect\01-source\EveryDayPerfect
+```

@@ -7,42 +7,14 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ROOT_DIR = Split-Path -Parent $PSScriptRoot
+$GIT_COMMON_PATH = Join-Path $PSScriptRoot "git_common.ps1"
 $GIT_EXE = $null
 
-function Resolve-GitExe {
-  $command = Get-Command git -ErrorAction SilentlyContinue
-  if ($null -ne $command) {
-    return $command.Source
-  }
-
-  $candidates = @(
-    "C:\Program Files\Git\cmd\git.exe",
-    "C:\Program Files\Git\bin\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe"
-  )
-
-  foreach ($candidate in $candidates) {
-    if (Test-Path $candidate) {
-      return $candidate
-    }
-  }
-
-  throw "Git is not installed or not available in PATH."
+if (-not (Test-Path $GIT_COMMON_PATH)) {
+  throw "Missing helper script: $GIT_COMMON_PATH"
 }
 
-function Invoke-Git {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & $GIT_EXE @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "git command failed: git $($Arguments -join ' ')"
-  }
-}
+. $GIT_COMMON_PATH
 
 function Test-GitAvailable {
   try {
@@ -63,16 +35,18 @@ Push-Location $ROOT_DIR
 try {
   if (-not (Test-Path (Join-Path $ROOT_DIR ".git"))) {
     Write-Host "[git] Initializing repository..."
-    Invoke-Git -Arguments @("init")
+    Invoke-Git -GitExe $GIT_EXE -Arguments @("init")
   } else {
     Write-Host "[git] Existing repository detected."
   }
 
+  Ensure-GitSafeDirectory -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR
+
   Write-Host "[git] Setting default branch to main..."
-  Invoke-Git -Arguments @("branch", "-M", "main")
+  Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("branch", "-M", "main")
 
   if ($RemoteUrl) {
-    & $GIT_EXE remote get-url origin 1>$null 2>$null
+    & $GIT_EXE -C $ROOT_DIR remote get-url origin 1>$null 2>$null
     $hasOrigin = ($LASTEXITCODE -eq 0)
 
     if ($hasOrigin) {
@@ -80,22 +54,22 @@ try {
         throw "Remote origin already exists. Re-run with -ForceRemoteUpdate to replace it."
       }
       Write-Host "[git] Updating remote origin..."
-      Invoke-Git -Arguments @("remote", "set-url", "origin", $RemoteUrl)
+      Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("remote", "set-url", "origin", $RemoteUrl)
     } else {
       Write-Host "[git] Adding remote origin..."
-      Invoke-Git -Arguments @("remote", "add", "origin", $RemoteUrl)
+      Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("remote", "add", "origin", $RemoteUrl)
     }
   }
 
   if ($InitialCommit) {
     Write-Host "[git] Staging files..."
-    Invoke-Git -Arguments @("add", ".")
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("add", ".")
 
     $hasHead = Test-Path (Join-Path $ROOT_DIR ".git\refs\heads\main")
     $commitMessage = if ($hasHead) { "chore: sync repository state" } else { "chore: initialize repository" }
 
     Write-Host "[git] Creating commit..."
-    Invoke-Git -Arguments @("commit", "-m", $commitMessage)
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("commit", "-m", $commitMessage)
   }
 
   Write-Host ""

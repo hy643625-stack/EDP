@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ROOT_DIR = Split-Path -Parent $PSScriptRoot
+$GIT_COMMON_PATH = Join-Path $PSScriptRoot "git_common.ps1"
 $APP_METADATA_PATH = Join-Path $ROOT_DIR "app_metadata.py"
 $VERSION_SCRIPT = Join-Path $ROOT_DIR "set_project_version.ps1"
 $PUBLISH_SCRIPT = Join-Path $ROOT_DIR "publish_windows_release.ps1"
@@ -17,38 +18,11 @@ $TAG_SCRIPT = Join-Path $ROOT_DIR "tools\create_git_release_tag.ps1"
 $CHANGELOG_PATH = Join-Path $ROOT_DIR "CHANGELOG.md"
 $GIT_EXE = $null
 
-function Resolve-GitExe {
-  $command = Get-Command git -ErrorAction SilentlyContinue
-  if ($null -ne $command) {
-    return $command.Source
-  }
-
-  $candidates = @(
-    "D:\Git\bin\git.exe",
-    "C:\Program Files\Git\cmd\git.exe",
-    "C:\Program Files\Git\bin\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe"
-  )
-
-  foreach ($candidate in $candidates) {
-    if (Test-Path $candidate) {
-      return $candidate
-    }
-  }
-
-  throw "Git is not installed or not available in PATH."
+if (-not (Test-Path $GIT_COMMON_PATH)) {
+  throw "Missing helper script: $GIT_COMMON_PATH"
 }
 
-function Invoke-Git {
-  param([string[]]$Arguments)
-
-  & $GIT_EXE @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "git command failed: git $($Arguments -join ' ')"
-  }
-}
+. $GIT_COMMON_PATH
 
 function Get-ProjectVersion {
   $content = Get-Content -LiteralPath $APP_METADATA_PATH -Raw
@@ -60,7 +34,7 @@ function Get-ProjectVersion {
 }
 
 function Assert-CleanWorkingTree {
-  $status = & $GIT_EXE status --short
+  $status = & $GIT_EXE -C $ROOT_DIR status --short
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to query git status."
   }
@@ -98,6 +72,7 @@ try {
     throw "Current directory is not a git repository: $ROOT_DIR"
   }
 
+  Ensure-GitSafeDirectory -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR
   Assert-CleanWorkingTree
 
   Write-Host "[release] Updating project version..."
@@ -117,8 +92,8 @@ try {
 
   if ($Commit) {
     Write-Host "[release] Creating git commit..."
-    Invoke-Git -Arguments @("add", ".")
-    Invoke-Git -Arguments @("commit", "-m", "release: v$newVersion")
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("add", ".")
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("commit", "-m", "release: v$newVersion")
   }
 
   if ($Tag) {
@@ -128,10 +103,10 @@ try {
 
   if ($Push) {
     Write-Host "[release] Pushing branch..."
-    Invoke-Git -Arguments @("push", "origin", "main")
+    Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("push", "origin", "main")
     if ($Tag) {
       Write-Host "[release] Pushing tag..."
-      Invoke-Git -Arguments @("push", "origin", "v$newVersion")
+      Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("push", "origin", "v$newVersion")
     }
   }
 

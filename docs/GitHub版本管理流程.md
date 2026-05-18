@@ -59,6 +59,26 @@ C:\Users\Lenovo\Desktop\EveryDayPerfect\01-source\EveryDayPerfect
 -> 推送 GitHub
 ```
 
+## Git 安全目录说明
+
+如果仓库曾被不同账户、不同终端环境或自动化工具写入，Git 可能会报：
+
+```text
+detected dubious ownership
+```
+
+当前项目内这几个脚本已经会自动把仓库根目录注册为当前用户的 `safe.directory`：
+
+- `tools/init_git_repo.ps1`
+- `tools/create_git_release_tag.ps1`
+- `tools/run_standard_release.ps1`
+
+如果你是在命令行里手工运行 Git，仍然遇到这个报错，就先手动执行：
+
+```powershell
+git config --global --add safe.directory C:\Users\Lenovo\Desktop\EveryDayPerfect\01-source\EveryDayPerfect
+```
+
 ## 标准发版流程
 
 ### 方式一：推荐，使用统一脚本
@@ -94,6 +114,9 @@ git push
 
 - `tools/run_standard_release.ps1`
   用于执行标准发版流程检查、构建、提交、打标签、推送。
+
+- `tools/git_common.ps1`
+  用于统一处理 Git 可执行文件定位、`safe.directory` 注册和公共命令调用。
 
 ## 发版前强制检查
 
