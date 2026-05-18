@@ -182,6 +182,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\run_standard_release.ps1 -Part 
 - `-GitHubRelease` 依赖本机已安装 `gh`
 - `gh` 需先执行 `gh auth login`
 - Release 说明不再手工整理，统一从 `CHANGELOG.md` 生成
+- 如果涉及代理、`gh` 登录或 Release 首次创建问题，优先查看：
+  `docs/GitHub发布与代理处理手册.md`
 
 ## 当前交付目录规范
 
