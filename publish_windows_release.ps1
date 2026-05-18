@@ -8,6 +8,7 @@ $INSTALLER_OUTPUT_DIR = Join-Path $ROOT_DIR "dist\installer"
 $USER_SOFTWARE_ROOT = Join-Path $WORKSPACE_ROOT "02-user-software"
 $SEND_ROOT = Join-Path $WORKSPACE_ROOT "03-send-package"
 $TEMPLATE_PATH = Join-Path $ROOT_DIR "packaging\windows\user_release_note_template.txt"
+$EXPORT_NOTES_SCRIPT = Join-Path $ROOT_DIR "tools\export_release_notes.ps1"
 $releaseManifestTarget = $null
 $sendManifestPath = $null
 
@@ -39,8 +40,10 @@ $sendZipPath = Join-Path $SEND_ROOT "$releaseName-delivery.zip"
 $sendManifestPath = Join-Path $SEND_ROOT "$releaseName-manifest.json"
 $installerSource = Join-Path $INSTALLER_OUTPUT_DIR $installerName
 $readmeTarget = Join-Path $userReleaseDir "README-user.txt"
+$releaseNotesTarget = Join-Path $userReleaseDir "release-notes.md"
 $installerTarget = Join-Path $userReleaseDir $installerName
 $releaseManifestTarget = Join-Path $userReleaseDir "release-manifest.json"
+$sendReleaseNotesPath = Join-Path $SEND_ROOT "$releaseName-release-notes.md"
 
 Write-Host "[release] Building installer..."
 Invoke-NativeCommand -FailureMessage "Installer build failed" -Command {
@@ -62,6 +65,11 @@ Copy-Item -LiteralPath $installerSource -Destination $installerTarget -Force
 
 $template = Get-Content $TEMPLATE_PATH -Raw -Encoding UTF8
 $template.Replace("{VERSION}", $version) | Set-Content -LiteralPath $readmeTarget -Encoding UTF8
+
+Invoke-NativeCommand -FailureMessage "Release notes export failed" -Command {
+  powershell -ExecutionPolicy Bypass -File $EXPORT_NOTES_SCRIPT -Version $version -OutputPath $releaseNotesTarget
+}
+Copy-Item -LiteralPath $releaseNotesTarget -Destination $sendReleaseNotesPath -Force
 
 if (Test-Path $sendZipPath) {
   Remove-Item -LiteralPath $sendZipPath -Force
@@ -85,6 +93,11 @@ $manifest = [ordered]@{
     size_bytes = $installerInfo.Length
     sha256 = $installerHash
   }
+  release_notes = [ordered]@{
+    name = (Split-Path -Leaf $sendReleaseNotesPath)
+    path = $sendReleaseNotesPath
+    user_copy_path = $releaseNotesTarget
+  }
   send_package = [ordered]@{
     name = $zipInfo.Name
     path = $zipInfo.FullName
@@ -101,3 +114,4 @@ Write-Host "[ok] User release exported"
 Write-Host "      User folder: $userReleaseDir"
 Write-Host "      Send zip:    $sendZipPath"
 Write-Host "      Manifest:    $sendManifestPath"
+Write-Host "      Notes:       $sendReleaseNotesPath"

@@ -39,6 +39,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 - 日常开发流程：`docs/标准开发流程.md`
 - GitHub 版本管理：`docs/GitHub版本管理流程.md`
 - 开发交接：`docs/开发交接手册.md`
+- 标准发版脚本：`tools/run_standard_release.ps1`
 
 当前仓库的 Git 脚本会自动处理 `safe.directory` 注册。  
 如果在命令行里手工执行 Git 时看到 `detected dubious ownership`，请先执行：
@@ -46,3 +47,9 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```powershell
 git config --global --add safe.directory C:\Users\Lenovo\Desktop\EveryDayPerfect\01-source\EveryDayPerfect
 ```
+
+当前标准交付会自动生成：
+
+- `README-user.txt`
+- `release-notes.md`
+- `release-manifest.json`

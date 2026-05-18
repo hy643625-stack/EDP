@@ -7,6 +7,10 @@ EveryDayPerfect {VERSION}
 2. 按安装向导完成安装
 3. 在开始菜单中搜索 `EveryDayPerfect` 并打开
 
+本目录附带：
+- `release-notes.md`：当前版本更新说明
+- `release-manifest.json`：当前版本文件清单与校验信息
+
 默认数据位置：
 C:\Users\Lenovo\AppData\Local\EveryDayPerfect\task.db
 

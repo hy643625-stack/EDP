@@ -155,14 +155,49 @@ git push
 
 - `EveryDayPerfect-<版本号>-delivery.zip`
 - `EveryDayPerfect-<版本号>-manifest.json`
+- 使用 `CHANGELOG.md` 自动生成的版本说明文件
 
-Release 说明可直接摘取 `CHANGELOG.md` 中该版本的条目。
+当前项目已补充：
+
+- `tools/export_release_notes.ps1`
+  从 `CHANGELOG.md` 自动提取指定版本条目，生成标准版本说明。
+
+- `tools/publish_github_release.ps1`
+  使用 GitHub CLI (`gh`) 创建或更新 GitHub Release，并上传 zip、manifest。
+
+如果本机已经安装并登录 GitHub CLI，可直接执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\publish_github_release.ps1 -Version 1.0.2 -MarkLatest
+```
+
+如果希望在标准发版流程中一并执行 GitHub Release：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\run_standard_release.ps1 -Part patch -Commit -Tag -Push -GitHubRelease
+```
+
+说明：
+
+- `-GitHubRelease` 依赖本机已安装 `gh`
+- `gh` 需先执行 `gh auth login`
+- Release 说明不再手工整理，统一从 `CHANGELOG.md` 生成
 
 ## 当前交付目录规范
 
 - 源码：`01-source\EveryDayPerfect`
 - 用户软件目录：`02-user-software\EveryDayPerfect-<版本号>`
 - 对外发送目录：`03-send-package`
+
+当前标准交付物包含：
+
+- `EveryDayPerfect-Setup-<版本号>.exe`
+- `README-user.txt`
+- `release-notes.md`
+- `release-manifest.json`
+- `EveryDayPerfect-<版本号>-delivery.zip`
+- `EveryDayPerfect-<版本号>-manifest.json`
+- `EveryDayPerfect-<版本号>-release-notes.md`
 
 ## 不纳入 Git 的内容
 

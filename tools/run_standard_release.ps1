@@ -4,7 +4,8 @@ param(
   [string]$Part = "",
   [switch]$Commit,
   [switch]$Tag,
-  [switch]$Push
+  [switch]$Push,
+  [switch]$GitHubRelease
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,7 @@ $APP_METADATA_PATH = Join-Path $ROOT_DIR "app_metadata.py"
 $VERSION_SCRIPT = Join-Path $ROOT_DIR "set_project_version.ps1"
 $PUBLISH_SCRIPT = Join-Path $ROOT_DIR "publish_windows_release.ps1"
 $TAG_SCRIPT = Join-Path $ROOT_DIR "tools\create_git_release_tag.ps1"
+$PUBLISH_GITHUB_RELEASE_SCRIPT = Join-Path $ROOT_DIR "tools\publish_github_release.ps1"
 $CHANGELOG_PATH = Join-Path $ROOT_DIR "CHANGELOG.md"
 $GIT_EXE = $null
 
@@ -64,6 +66,10 @@ if (($Tag -or $Push) -and -not $Commit) {
   throw "Using -Tag or -Push requires -Commit."
 }
 
+if ($GitHubRelease -and (-not $Commit -or -not $Tag -or -not $Push)) {
+  throw "Using -GitHubRelease requires -Commit -Tag -Push."
+}
+
 $GIT_EXE = Resolve-GitExe
 
 Push-Location $ROOT_DIR
@@ -108,6 +114,11 @@ try {
       Write-Host "[release] Pushing tag..."
       Invoke-Git -GitExe $GIT_EXE -RepositoryPath $ROOT_DIR -Arguments @("push", "origin", "v$newVersion")
     }
+  }
+
+  if ($GitHubRelease) {
+    Write-Host "[release] Publishing GitHub Release..."
+    powershell -ExecutionPolicy Bypass -File $PUBLISH_GITHUB_RELEASE_SCRIPT -Version $newVersion -MarkLatest
   }
 
   Write-Host "[ok] Standard release flow completed"
