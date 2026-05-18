@@ -80,8 +80,23 @@ if ($LASTEXITCODE -ne 0) {
   throw "GitHub CLI is not authenticated. Run 'gh auth login' first."
 }
 
-& $ghExe release view $tagName --repo hy643625-stack/EDP *> $null
-$releaseExists = ($LASTEXITCODE -eq 0)
+$releaseListJson = & $ghExe release list --repo hy643625-stack/EDP --limit 100 --json tagName 2>$null
+if ($LASTEXITCODE -ne 0) {
+  throw "Failed to query existing GitHub Releases."
+}
+
+$releaseList = @()
+if ($releaseListJson -and "$releaseListJson".Trim()) {
+  $releaseList = $releaseListJson | ConvertFrom-Json
+}
+
+$releaseExists = $false
+foreach ($release in $releaseList) {
+  if ($release.tagName -eq $tagName) {
+    $releaseExists = $true
+    break
+  }
+}
 
 if ($releaseExists) {
   $editArgs = @(
