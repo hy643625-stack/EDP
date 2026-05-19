@@ -10,6 +10,7 @@ from app.repositories.task_repository import TaskRepository
 from app.repositories.todo_repository import TodoRepository
 from app.services.ai_settings_service import AiSettingsService
 from app.services.ai_summary_service import AiSummaryService
+from app.services.learning_agent_service import LearningAgentService
 from app.services import FocusService, RecordService, TaskService, TodoService
 from app.services.home_service import HomeService
 
@@ -29,6 +30,12 @@ def get_ai_summary_service(
     task_repo = TaskRepository(db)
     home_service = HomeService(HomeRepository(db), task_repo)
     return AiSummaryService(home_service, ai_settings_service)
+
+
+def get_learning_agent_service(
+    ai_settings_service: AiSettingsService = Depends(get_ai_settings_service),
+) -> LearningAgentService:
+    return LearningAgentService(ai_settings_service)
 
 
 def get_task_service(db: Database = Depends(get_db)) -> TaskService:

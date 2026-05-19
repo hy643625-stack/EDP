@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import ai_settings_router, focus_router, home_router, misc_router, records_router, tasks_router, todos_router
+from app.api import ai_settings_router, focus_router, home_router, learning_router, misc_router, records_router, tasks_router, todos_router
 from app.config import Settings
 from app.db import Database
 from app.errors import ApiError
@@ -43,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(todos_router)
     app.include_router(focus_router)
     app.include_router(home_router)
+    app.include_router(learning_router)
     configure_static_site(app, settings.frontend_dist_path)
 
     @app.exception_handler(ApiError)

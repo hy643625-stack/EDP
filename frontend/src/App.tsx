@@ -30,18 +30,20 @@ import { CommandCenterTab } from '@/features/home/CommandCenterTab'
 import { CreateTaskModal } from '@/features/overview/CreateTaskModal'
 import { DEFAULT_TASK_COLOR } from '@/features/overview/taskColorPresets'
 import { AiSettingsModal, type AiProviderConfigDraft } from '@/features/settings/AiSettingsModal'
+import { LearningStudioTab } from '@/features/learning/LearningStudioTab'
 import { StatsTab } from '@/features/stats/StatsTab'
 import { TimeTab } from '@/features/time/TimeTab'
 import { TodosTab } from '@/features/todos/TodosTab'
 
-type TabKey = 'records' | 'todos' | 'time' | 'stats'
+type TabKey = 'records' | 'todos' | 'time' | 'stats' | 'learning'
 type TimerMode = 'countup' | 'countdown'
 
 const tabs: Array<SegmentedTabItem<TabKey>> = [
   { key: 'records', label: 'Records', icon: ListChecks },
   { key: 'todos', label: 'Todos', icon: ListTodo },
   { key: 'time', label: 'Time', icon: AlarmClock },
-  { key: 'stats', label: 'Stats', icon: BarChart3 }
+  { key: 'stats', label: 'Stats', icon: BarChart3 },
+  { key: 'learning', label: 'Learning', icon: Bot }
 ]
 
 const timerModeTabs: Array<SegmentedTabItem<TimerMode>> = [
@@ -1476,6 +1478,10 @@ function App() {
             isGlobalScope={statsScopeTaskId === 1}
             onLoadAiSummary={handleLoadAiSummary}
           />
+        ) : null}
+
+        {activeTab === 'learning' ? (
+          <LearningStudioTab onOpenAiSettings={() => void openAiSettings()} />
         ) : null}
       </main>
 

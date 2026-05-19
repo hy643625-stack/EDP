@@ -34,7 +34,7 @@ class AppMetadata:
 APP_METADATA = AppMetadata(
     name="EveryDayPerfect",
     exe_name="EveryDayPerfect",
-    version="1.0.2",
+    version="1.0.3",
     publisher="EveryDayPerfect",
     description="Focused daily execution command center.",
     install_dir_name="EveryDayPerfect",

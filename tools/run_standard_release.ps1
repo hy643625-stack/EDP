@@ -18,6 +18,7 @@ $PUBLISH_SCRIPT = Join-Path $ROOT_DIR "publish_windows_release.ps1"
 $TAG_SCRIPT = Join-Path $ROOT_DIR "tools\create_git_release_tag.ps1"
 $PUBLISH_GITHUB_RELEASE_SCRIPT = Join-Path $ROOT_DIR "tools\publish_github_release.ps1"
 $CHANGELOG_PATH = Join-Path $ROOT_DIR "CHANGELOG.md"
+$POWERSHELL_EXE = (Get-Command powershell.exe -ErrorAction Stop).Source
 $GIT_EXE = $null
 
 if (-not (Test-Path $GIT_COMMON_PATH)) {
@@ -83,9 +84,9 @@ try {
 
   Write-Host "[release] Updating project version..."
   if ($Version) {
-    powershell -ExecutionPolicy Bypass -File $VERSION_SCRIPT -Version $Version
+    & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $VERSION_SCRIPT -Version $Version
   } else {
-    powershell -ExecutionPolicy Bypass -File $VERSION_SCRIPT -Part $Part
+    & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $VERSION_SCRIPT -Part $Part
   }
 
   $newVersion = Get-ProjectVersion
@@ -94,7 +95,7 @@ try {
   Assert-ChangelogContainsVersion -CurrentVersion $newVersion
 
   Write-Host "[release] Building user release package..."
-  powershell -ExecutionPolicy Bypass -File $PUBLISH_SCRIPT
+  & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $PUBLISH_SCRIPT
 
   if ($Commit) {
     Write-Host "[release] Creating git commit..."
@@ -104,7 +105,7 @@ try {
 
   if ($Tag) {
     Write-Host "[release] Creating git tag..."
-    powershell -ExecutionPolicy Bypass -File $TAG_SCRIPT -Version $newVersion
+    & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $TAG_SCRIPT -Version $newVersion
   }
 
   if ($Push) {
@@ -118,7 +119,7 @@ try {
 
   if ($GitHubRelease) {
     Write-Host "[release] Publishing GitHub Release..."
-    powershell -ExecutionPolicy Bypass -File $PUBLISH_GITHUB_RELEASE_SCRIPT -Version $newVersion -MarkLatest
+    & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $PUBLISH_GITHUB_RELEASE_SCRIPT -Version $newVersion -MarkLatest
   }
 
   Write-Host "[ok] Standard release flow completed"

@@ -12,6 +12,9 @@ import type {
   FocusSession,
   FocusStats,
   HomeSnapshot,
+  LearningProfilePayload,
+  LearningResourcePackagePayload,
+  LearningWorkbenchPayload,
   SettlementReport,
   Task,
   TaskAttrRelation,
@@ -286,5 +289,22 @@ export const api = {
   }) => unwrap<AiConnectionTestResult>(() => http.post('/v1/ai/settings/test', payload))
   ,
   getAiSummary: (payload: { task_id: number; attr_id: number; record_date: string }) =>
-    unwrap<AiSummaryPayload>(() => http.post('/v1/ai/summary', payload))
+    unwrap<AiSummaryPayload>(() => http.post('/v1/ai/summary', payload)),
+
+  getLearningWorkbench: () =>
+    unwrap<LearningWorkbenchPayload>(() => http.get('/v1/learning/workbench'), { retries: REQUEST_RETRY_COUNT }),
+  buildLearningProfile: (payload: {
+    course_id: string
+    conversation: string
+    preferred_goal?: string
+    weekly_days?: number
+    daily_minutes?: number
+  }) => unwrap<LearningProfilePayload>(() => http.post('/v1/learning/profile', payload)),
+  generateLearningResourcePackage: (payload: {
+    course_id: string
+    conversation: string
+    preferred_goal?: string
+    weekly_days?: number
+    daily_minutes?: number
+  }) => unwrap<LearningResourcePackagePayload>(() => http.post('/v1/learning/resource-package', payload))
 }

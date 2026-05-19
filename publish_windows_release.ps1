@@ -9,6 +9,7 @@ $USER_SOFTWARE_ROOT = Join-Path $WORKSPACE_ROOT "02-user-software"
 $SEND_ROOT = Join-Path $WORKSPACE_ROOT "03-send-package"
 $TEMPLATE_PATH = Join-Path $ROOT_DIR "packaging\windows\user_release_note_template.txt"
 $EXPORT_NOTES_SCRIPT = Join-Path $ROOT_DIR "tools\export_release_notes.ps1"
+$POWERSHELL_EXE = (Get-Command powershell.exe -ErrorAction Stop).Source
 $releaseManifestTarget = $null
 $sendManifestPath = $null
 
@@ -47,7 +48,7 @@ $sendReleaseNotesPath = Join-Path $SEND_ROOT "$releaseName-release-notes.md"
 
 Write-Host "[release] Building installer..."
 Invoke-NativeCommand -FailureMessage "Installer build failed" -Command {
-  powershell -ExecutionPolicy Bypass -File $INSTALLER_BUILD_SCRIPT
+  & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $INSTALLER_BUILD_SCRIPT
 }
 
 if (-not (Test-Path $installerSource)) {
@@ -67,7 +68,7 @@ $template = Get-Content $TEMPLATE_PATH -Raw -Encoding UTF8
 $template.Replace("{VERSION}", $version) | Set-Content -LiteralPath $readmeTarget -Encoding UTF8
 
 Invoke-NativeCommand -FailureMessage "Release notes export failed" -Command {
-  powershell -ExecutionPolicy Bypass -File $EXPORT_NOTES_SCRIPT -Version $version -OutputPath $releaseNotesTarget
+  & $POWERSHELL_EXE -ExecutionPolicy Bypass -File $EXPORT_NOTES_SCRIPT -Version $version -OutputPath $releaseNotesTarget
 }
 Copy-Item -LiteralPath $releaseNotesTarget -Destination $sendReleaseNotesPath -Force
 

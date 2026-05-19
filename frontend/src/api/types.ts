@@ -286,3 +286,144 @@ export interface AiProviderConfigInput {
   stream?: boolean
   timeout_seconds?: number
 }
+
+export interface LearningCourseModule {
+  module_id: string
+  title: string
+  core_points: string[]
+  outcome: string
+}
+
+export interface LearningCourse {
+  course_id: string
+  title: string
+  category: string
+  difficulty: string
+  summary: string
+  tags: string[]
+  module_count: number
+  modules: LearningCourseModule[]
+}
+
+export interface LearningAgentDescriptor {
+  agent_id: string
+  name: string
+  responsibility: string
+}
+
+export interface LearningProfileDimension {
+  key: string
+  label: string
+  value: string
+  evidence: string
+  confidence: number
+}
+
+export interface LearningProfileCore {
+  overview: string
+  dimensions: LearningProfileDimension[]
+  strengths: string[]
+  risks: string[]
+  follow_up_questions: string[]
+  focus_modules: LearningCourseModule[]
+  weekly_days: number
+  daily_minutes: number
+}
+
+export interface LearningProfilePayload {
+  course: LearningCourse
+  profile: LearningProfileCore
+  mode_requested: AiMode
+  mode_used: 'local_rules' | 'model'
+  provider_id: string | null
+  runtime_message: string
+  fallback_reason: string | null
+  generated_at: string
+}
+
+export interface LearningResourceCard {
+  resource_id: string
+  type: string
+  title: string
+  summary: string
+  estimated_minutes: number
+  agent_id: string
+  content_markdown: string
+}
+
+export interface LearningPathStage {
+  stage_id: string
+  title: string
+  objective: string
+  focus_modules: string[]
+  deliverables: string[]
+  study_plan: string
+  coach_tip: string
+}
+
+export interface LearningAgentRun {
+  agent_id: string
+  name: string
+  status: 'completed'
+  summary: string
+}
+
+export interface LearningEvaluationPanel {
+  mastery_signals: string[]
+  self_check_questions: string[]
+  rubric: Array<{
+    level: string
+    description: string
+  }>
+}
+
+export interface LearningResourcePackage {
+  package_overview: string
+  coach_message: string
+  resource_count: number
+  resources: LearningResourceCard[]
+  learning_path: LearningPathStage[]
+  agent_runs: LearningAgentRun[]
+  evaluation: LearningEvaluationPanel
+  source_digest: {
+    conversation_excerpt: string
+    focus_module_titles: string[]
+  }
+}
+
+export interface LearningResourcePackagePayload {
+  course: LearningCourse
+  profile: LearningProfileCore
+  package: LearningResourcePackage
+  mode_requested: AiMode
+  mode_used: 'local_rules' | 'model'
+  provider_id: string | null
+  runtime_message: string
+  fallback_reason: string | null
+  generated_at: string
+}
+
+export interface LearningWorkbenchPayload {
+  courses: LearningCourse[]
+  agents: LearningAgentDescriptor[]
+  profile_dimensions: Array<{
+    key: string
+    label: string
+  }>
+  privacy_notice: string
+  runtime: {
+    mode: AiMode
+    provider_id: string | null
+    uses_local_rules: boolean
+    fallback_enabled: boolean
+    runtime_status: string
+    runtime_message: string
+    confirmation_required: boolean
+  }
+  feature_flags: {
+    profile_builder: boolean
+    resource_package: boolean
+    learning_path: boolean
+    evaluation_panel: boolean
+  }
+}
