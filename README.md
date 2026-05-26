@@ -26,6 +26,20 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\stop_everydayperfect.ps1
 ```
 
+## macOS / Linux 快速启动
+```bash
+./start_dev.sh      # 本机访问（默认 127.0.0.1）
+./start_mobile.sh   # 局域网 + 手机访问（绑定 0.0.0.0）
+./stop_dev.sh       # 停止服务
+```
+
+自定义端口：
+```bash
+BACKEND_PORT=9000 FRONTEND_PORT=3000 ./start_dev.sh
+```
+
+首次运行会自动创建 Python 虚拟环境并安装依赖。
+
 默认地址：
 - 前端：`http://127.0.0.1:5173`
 - 后端：`http://127.0.0.1:18765`

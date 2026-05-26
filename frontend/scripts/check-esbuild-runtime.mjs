@@ -5,22 +5,26 @@ import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(scriptDir, '..')
-const esbuildExe = resolve(frontendDir, 'node_modules', '@esbuild', 'win32-x64', 'esbuild.exe')
 
-if (!existsSync(esbuildExe)) {
-  console.error(`[check] Missing esbuild binary: ${esbuildExe}`)
-  console.error('[hint] Run `npm.cmd install` in the frontend directory to restore the toolchain.')
+const platform = process.platform
+const arch = process.arch === 'x64' ? 'x64' : 'arm64'
+const esbuildPkg = `@esbuild/${platform}-${arch}`
+const esbuildBin = resolve(frontendDir, 'node_modules', esbuildPkg, 'bin', 'esbuild')
+
+if (!existsSync(esbuildBin)) {
+  console.error(`[check] Missing esbuild binary: ${esbuildBin}`)
+  console.error('[hint] Run `npm install` in the frontend directory to restore the toolchain.')
   process.exit(1)
 }
 
-const result = spawnSync(esbuildExe, ['--version'], {
+const result = spawnSync(esbuildBin, ['--version'], {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe']
 })
 
 if (result.error) {
   console.error(`[check] Failed to spawn esbuild: ${result.error.message}`)
-  console.error('[hint] Windows likely blocked esbuild. Use Node 20 LTS, allow esbuild.exe in Windows Security or Controlled Folder Access, or retry in an elevated PowerShell window.')
+  console.error('[hint] esbuild binary may be blocked or corrupted. Reinstall frontend dependencies and recheck.')
   process.exit(1)
 }
 
@@ -30,7 +34,7 @@ if (result.status !== 0) {
   if (details) {
     console.error(details)
   }
-  console.error('[hint] Windows likely blocked esbuild or the install is incomplete. Reinstall frontend dependencies and recheck.')
+  console.error('[hint] esbuild install is incomplete. Reinstall frontend dependencies and recheck.')
   process.exit(result.status ?? 1)
 }
 

@@ -16,6 +16,7 @@ packaging/windows/EveryDayPerfect.ico
 packaging/windows/version_info.txt
 packaging/windows/app_metadata.iss
 .run/
+.vite/
 _test_tmp/
 _manual_smoke/
 deploy/data/
