@@ -1,6 +1,9 @@
 """Tests for Phase 2: learning sessions, profile versions, agent pipeline."""
 from __future__ import annotations
 
+import os
+os.environ.setdefault("EVERYDAYPERFECT_SKIP_DEFAULT_APP", "1")
+
 import pytest
 from app.config import Settings
 from app.main import create_app

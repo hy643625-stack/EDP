@@ -231,6 +231,7 @@ class LearningAgentService:
         normalized = self._normalize_conversation(conversation)
         profile = self._build_profile_core(course, normalized, preferred_goal, weekly_days, daily_minutes)
         input_summary = normalized[:200]
+        meta = self._execution_meta()
 
         if self.repo is None:
             sid = f"ephemeral-{self._utc_now_iso()}"
@@ -240,6 +241,7 @@ class LearningAgentService:
                 "profile": profile,
                 "profile_version": 1,
                 "course": course,
+                **meta,
             }
 
         session = self.repo.create_session(
@@ -260,6 +262,7 @@ class LearningAgentService:
             "profile": profile,
             "profile_version": 1,
             "course": course,
+            **meta,
         }
 
     def update_session_profile(
@@ -329,7 +332,8 @@ class LearningAgentService:
         detail: dict[str, Any] = {"session": session}
         if self.repo is not None:
             detail["profile_versions"] = self.repo.get_profile_versions(session_id)
-            detail["latest_package"] = self.repo.get_latest_package(session_id)
+            latest_raw = self.repo.get_latest_package(session_id)
+            detail["latest_package"] = latest_raw.get("package") if latest_raw else None
             detail["agent_runs"] = self.repo.get_agent_runs(session_id)
         else:
             detail["profile_versions"] = []
@@ -1298,6 +1302,18 @@ class LearningAgentService:
     @staticmethod
     def _utc_now_iso() -> str:
         return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    def _execution_meta(self) -> dict[str, Any]:
+        """Standard execution metadata for all session/profile responses."""
+        plan = self.ai_settings_service.get_execution_plan()
+        return {
+            "mode_requested": plan["mode"],
+            "mode_used": "local_rules",
+            "provider_id": plan["provider_id"],
+            "runtime_message": plan["runtime_message"],
+            "fallback_reason": None,
+            "generated_at": self._utc_now_iso(),
+        }
 
 
 # ── Fallback courses (for courses not yet in KnowledgeBase) ──
