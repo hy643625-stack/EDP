@@ -1,0 +1,21 @@
+{
+  "course_id": "data_structures",
+  "title": "数据结构与算法",
+  "version": "1.0.0",
+  "summary": "面向高校计算机相关专业的数据结构核心课程，覆盖从复杂度分析到图算法的完整知识体系。",
+  "target_learners": [
+    "计算机本科低年级",
+    "期末复习学生",
+    "软件杯演示用户"
+  ],
+  "modules": [
+    "ds-01-complexity",
+    "ds-02-linear-list",
+    "ds-03-stack-queue",
+    "ds-04-tree",
+    "ds-05-hash-search",
+    "ds-06-graph",
+    "ds-07-sorting",
+    "ds-08-integrated-project"
+  ]
+}

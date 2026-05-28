@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-05-hash-search",
+  "title": "查找与哈希表",
+  "difficulty": "intermediate",
+  "estimated_minutes": 120,
+  "prerequisites": ["ds-02-linear-list", "ds-01-complexity"],
+  "learning_objectives": [
+    "能实现并分析顺序查找和二分查找的复杂度",
+    "能解释哈希表的工作原理（哈希函数、冲突处理）",
+    "能对比链地址法和开放地址法的优劣",
+    "能分析哈希表查找的平均复杂度和最坏复杂度"
+  ],
+  "keywords": ["顺序查找", "二分查找", "哈希表", "哈希冲突", "链地址法", "开放地址法"],
+  "source_refs": ["opendsa", "clrs", "mit-6-006"]
+}

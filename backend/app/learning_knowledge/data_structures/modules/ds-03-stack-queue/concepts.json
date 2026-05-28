@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-03-c01",
+    "name": "栈（Stack）",
+    "definition": "后进先出（LIFO）的线性数据结构。只能在栈顶进行插入（push）和删除（pop）。",
+    "common_mistakes": ["试图访问栈中非栈顶元素", "pop 前未检查栈是否为空"],
+    "example": "浏览器的后退按钮、编辑器的撤销操作均使用栈实现。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-03-c02",
+    "name": "队列（Queue）",
+    "definition": "先进先出（FIFO）的线性数据结构。入队（enqueue）在队尾，出队（dequeue）在队首。",
+    "common_mistakes": ["用 list.pop(0) 实现出队导致 O(n) 复杂度", "混淆循环队列的满和空判断条件"],
+    "example": "打印机队列、BFS 的待访问节点集合均使用队列。",
+    "source_refs": ["runestone"]
+  },
+  {
+    "concept_id": "ds-03-c03",
+    "name": "表达式求值",
+    "definition": "利用栈将中缀表达式转换为后缀表达式（逆波兰记号），再通过栈计算后缀表达式的值。",
+    "common_mistakes": ["运算符优先级和结合性处理错误", "括号匹配不全时未报错"],
+    "example": "中缀 (3+4)×5 → 后缀 3 4 + 5 ×，计算得 35。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-03-c04",
+    "name": "循环队列",
+    "definition": "用固定大小的数组实现队列，通过取模运算实现首尾相接，避免出队后空间的浪费。",
+    "common_mistakes": ["混淆队空（front==rear）和队满（(rear+1)%capacity==front）的条件", "队满时丢弃元素而非扩容"],
+    "example": "操作系统环形缓冲区使用循环队列避免数据移动。",
+    "source_refs": ["runestone"]
+  },
+  {
+    "concept_id": "ds-03-c05",
+    "name": "双端队列（Deque）",
+    "definition": "允许在两端进行插入和删除的线性结构，兼有栈和队列的特性。",
+    "common_mistakes": ["混淆双端队列的操作方向（左边插入 vs 右边插入）"],
+    "example": "Python collections.deque 支持 O(1) 的双端操作，适合滑动窗口问题。",
+    "source_refs": ["the-algorithms-python"]
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "module_id": "ds-08-integrated-project",
+  "title": "综合实验与课程项目",
+  "difficulty": "advanced",
+  "estimated_minutes": 180,
+  "prerequisites": [
+    "ds-01-complexity", "ds-02-linear-list", "ds-03-stack-queue",
+    "ds-04-tree", "ds-05-hash-search", "ds-06-graph", "ds-07-sorting"
+  ],
+  "learning_objectives": [
+    "能综合运用多种数据结构解决实际工程问题",
+    "能根据问题特征选择最优的数据结构和算法组合",
+    "能对已有代码进行复杂度分析和性能优化",
+    "能独立完成一个含设计文档的小型课程项目"
+  ],
+  "keywords": ["综合", "项目", "贪吃蛇", "选型决策", "错题复盘"],
+  "source_refs": ["the-algorithms-python", "opendsa"]
+}

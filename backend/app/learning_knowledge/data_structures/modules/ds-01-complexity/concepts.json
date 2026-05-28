@@ -1,0 +1,57 @@
+[
+  {
+    "concept_id": "ds-01-c01",
+    "name": "时间复杂度",
+    "definition": "描述算法运行时间随输入规模增长而变化的渐进量级，通常使用大 O 记号表示。",
+    "common_mistakes": [
+      "把实际运行秒数等同于时间复杂度",
+      "忽略常数因子的实际影响却只说理论 O(n)"
+    ],
+    "example": "两层嵌套循环通常对应 O(n²)，单层循环为 O(n)。",
+    "source_refs": ["mit-6-006", "clrs"]
+  },
+  {
+    "concept_id": "ds-01-c02",
+    "name": "空间复杂度",
+    "definition": "描述算法执行过程中所需额外存储空间随输入规模增长的渐进量级。",
+    "common_mistakes": [
+      "只关注时间复杂度而忽略空间复杂度",
+      "把源代码长度当作空间复杂度"
+    ],
+    "example": "递归调用栈深度为 n 时，空间复杂度通常为 O(n)。",
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "concept_id": "ds-01-c03",
+    "name": "大 O 记号",
+    "definition": "渐进上界记号。f(n) = O(g(n)) 表示存在正常数 c 和 n₀，使得对所有 n ≥ n₀，有 f(n) ≤ c·g(n)。",
+    "common_mistakes": [
+      "把 O(n) 和 O(2n) 当成不同的复杂度",
+      "用等号当精确相等而非集合关系"
+    ],
+    "example": "3n² + 2n + 1 = O(n²)，常数因子和低次项可忽略。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-01-c04",
+    "name": "抽象数据类型（ADT）",
+    "definition": "将数据类型的逻辑行为与具体实现分离的规范。ADT 定义操作集合和语义，不规定内部存储方式。",
+    "common_mistakes": [
+      "把 ADT 等同于具体数据结构（如说：ADT 就是链表）",
+      "设计 ADT 时过早考虑实现细节"
+    ],
+    "example": "栈是一种 ADT，可用数组或链表实现。其核心操作是 push 和 pop。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-01-c05",
+    "name": "递归与主定理",
+    "definition": "递归是一种函数调用自身的编程技术。主定理可用于求解形如 T(n) = aT(n/b) + f(n) 的递推式。",
+    "common_mistakes": [
+      "递归缺少终止条件导致无限递归",
+      "误用主定理在不符合条件的情况"
+    ],
+    "example": "归并排序递推式 T(n) = 2T(n/2) + O(n)，由主定理得 T(n) = O(n log n)。",
+    "source_refs": ["mit-6-006", "clrs"]
+  }
+]

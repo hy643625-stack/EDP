@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-02-c01",
+    "name": "顺序表（数组实现）",
+    "definition": "用连续内存空间存储线性表中的元素，可通过下标 O(1) 随机访问。",
+    "common_mistakes": ["认为数组插入头部也是 O(1)", "忘记数组扩容的摊销成本"],
+    "example": "Python list 底层是动态数组，append 摊销 O(1)，insert(0, x) 为 O(n)。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-02-c02",
+    "name": "单链表",
+    "definition": "每个节点包含数据域和指向后继节点的指针。表头指针指向第一个节点。",
+    "common_mistakes": ["插入/删除时丢失后继指针导致断链", "对空链表或单节点链表做删除时未特殊处理"],
+    "example": "头插法 O(1)，尾插法需遍历到表尾 O(n)。",
+    "source_refs": ["runestone", "the-algorithms-python"]
+  },
+  {
+    "concept_id": "ds-02-c03",
+    "name": "双向链表",
+    "definition": "每个节点包含前驱指针 prev 和后继指针 next。支持双向遍历和 O(1) 的前驱删除。",
+    "common_mistakes": ["删除节点时只更新一边指针导致链表损坏", "忘记维护头尾节点的 prev/next 为 None"],
+    "example": "LRU 缓存通常使用双向链表 + 哈希表实现。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-02-c04",
+    "name": "头结点与哨兵",
+    "definition": "在链表头部添加不存储实际数据的额外节点，简化边界条件处理。",
+    "common_mistakes": ["混淆头指针（指向第一个节点）与头结点（额外的哨兵节点）"],
+    "example": "有头结点的链表删除第一个元素时不需要修改头指针。",
+    "source_refs": ["runestone"]
+  },
+  {
+    "concept_id": "ds-02-c05",
+    "name": "顺序表 vs 链表选型",
+    "definition": "根据操作模式选择合适结构：随机访问多用顺序表，频繁插入删除用链表。",
+    "common_mistakes": ["只考虑时间复杂度而忽略缓存局部性", "在大数据量场景下忽略链表指针的内存开销"],
+    "example": "需要在中间位置频繁插入 → 链表。需要频繁按下标查询 → 顺序表。",
+    "source_refs": ["mit-6-006"]
+  }
+]

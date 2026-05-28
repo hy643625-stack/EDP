@@ -14,6 +14,9 @@ import type {
   HomeSnapshot,
   LearningProfilePayload,
   LearningResourcePackagePayload,
+  LearningSessionCreateResponse,
+  LearningSessionDetail,
+  LearningSessionSummary,
   LearningWorkbenchPayload,
   SettlementReport,
   Task,
@@ -306,5 +309,27 @@ export const api = {
     preferred_goal?: string
     weekly_days?: number
     daily_minutes?: number
-  }) => unwrap<LearningResourcePackagePayload>(() => http.post('/v1/learning/resource-package', payload))
+  }) => unwrap<LearningResourcePackagePayload>(() => http.post('/v1/learning/resource-package', payload)),
+
+  // Phase 2: Session endpoints
+  listLearningSessions: () =>
+    unwrap<LearningSessionSummary[]>(() => http.get('/v1/learning/sessions')),
+  createLearningSession: (payload: {
+    course_id: string
+    conversation: string
+    preferred_goal?: string
+    weekly_days?: number
+    daily_minutes?: number
+    title?: string
+  }) => unwrap<LearningSessionCreateResponse>(() => http.post('/v1/learning/sessions', payload)),
+  getLearningSession: (sessionId: string) =>
+    unwrap<LearningSessionDetail>(() => http.get(`/v1/learning/sessions/${sessionId}`)),
+  updateLearningSessionProfile: (sessionId: string, payload: {
+    conversation: string
+    preferred_goal?: string
+    weekly_days?: number
+    daily_minutes?: number
+  }) => unwrap<LearningProfilePayload>(() => http.post(`/v1/learning/sessions/${sessionId}/profile`, payload)),
+  generateSessionResourcePackage: (sessionId: string) =>
+    unwrap<LearningResourcePackagePayload>(() => http.post(`/v1/learning/sessions/${sessionId}/resource-package`)),
 }

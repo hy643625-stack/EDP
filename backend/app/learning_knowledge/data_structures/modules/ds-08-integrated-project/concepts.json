@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-08-c01",
+    "name": "数据结构选型决策框架",
+    "definition": "根据问题的数据量、操作模式（增删查改比例）、内存限制和时间限制，系统性地选择合适的数据结构。",
+    "common_mistakes": ["未经分析就使用最熟悉的结构", "忽略组合结构（如哈希表+双向链表）的可能"],
+    "example": "设计一个排行榜系统：写入 O(log n)（堆/平衡树）、查询 Top-100 O(k log k)（从堆取 top k）。",
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "concept_id": "ds-08-c02",
+    "name": "综合实验：贪吃蛇（数据结构版）",
+    "definition": "用双端队列存储蛇身、集合存储障碍物/食物位置、根据键盘方向更新蛇头位置并判断碰撞。",
+    "common_mistakes": ["用 list 存储蛇身并在头部插入 O(n)", "碰撞检测遍历所有障碍 O(m) 而非用集合 O(1)"],
+    "example": "collections.deque 的 appendleft 和 pop 实现蛇的移动 O(1)，set 存储不可通行位置。",
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "concept_id": "ds-08-c03",
+    "name": "复杂度驱动的性能优化",
+    "definition": "通过分析瓶颈操作，将 O(n²) 替换为 O(n log n) 或 O(n)，将数组改为哈希表或堆。",
+    "common_mistakes": ["过早优化——不经 profiling 就优化非瓶颈代码", "更换数据结构后忘记更新相关操作的复杂度分析"],
+    "example": "将双重循环查找重复元素 O(n²) 改为哈希集合一次遍历 O(n)。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-08-c04",
+    "name": "错题分析与复盘",
+    "definition": "对课程各模块的常见错误进行分类（概念混淆、边界条件、复杂度误判、代码实现），建立个人错题本。",
+    "common_mistakes": ["只做题不复盘", "错题归类过于笼统（如全归为'粗心'）"],
+    "example": "类型：边界条件 | 问题：链表反转未处理空链表 | 根本原因：编写前未列出边界 case。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-08-c05",
+    "name": "课程项目设计方法",
+    "definition": "从需求分析 → 接口设计 → 数据结构选型 → 算法设计 → 复杂度分析 → 测试验证的完整流程。",
+    "common_mistakes": ["跳过接口设计直接编码", "未考虑扩展性（硬编码规模、类型）"],
+    "example": "设计一个学生选课系统：用哈希表存学生→课程映射，用优先队列处理热门课程抢课排队。",
+    "source_refs": ["mit-6-006"]
+  }
+]

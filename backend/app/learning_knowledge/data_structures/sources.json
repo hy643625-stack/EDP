@@ -1,0 +1,37 @@
+[
+  {
+    "source_id": "mit-6-006",
+    "title": "MIT OCW 6.006 Introduction to Algorithms",
+    "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/",
+    "license": "Creative Commons BY-NC-SA",
+    "usage": "参考课程结构与主题范围，不复制原文"
+  },
+  {
+    "source_id": "opendsa",
+    "title": "OpenDSA: Open Source Interactive Data Structures and Algorithms",
+    "url": "https://opendsa.org/",
+    "license": "MIT",
+    "usage": "数据结构模块划分与交互练习设计参考"
+  },
+  {
+    "source_id": "runestone",
+    "title": "Runestone Academy — Problem Solving with Algorithms and Data Structures using Python",
+    "url": "https://runestone.academy/",
+    "license": "Creative Commons BY-NC-SA",
+    "usage": "Python 讲解风格与例题设计参考"
+  },
+  {
+    "source_id": "the-algorithms-python",
+    "title": "TheAlgorithms/Python",
+    "url": "https://github.com/TheAlgorithms/Python",
+    "license": "MIT",
+    "usage": "代码实现参考，可改编后用于实验案例"
+  },
+  {
+    "source_id": "clrs",
+    "title": "Introduction to Algorithms (CLRS), 4th Edition",
+    "url": "https://mitpress.mit.edu/9780262046305/introduction-to-algorithms/",
+    "license": "Copyrighted",
+    "usage": "算法理论权威参考，用于校准概念定义与复杂度分析"
+  }
+]

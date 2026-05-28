@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-02-linear-list",
+  "title": "线性表：顺序表与链表",
+  "difficulty": "basic",
+  "estimated_minutes": 120,
+  "prerequisites": ["ds-01-complexity", "基础编程语法"],
+  "learning_objectives": [
+    "能区分顺序表（数组）和链表的存储结构与适用场景",
+    "能实现单链表的增删查改操作",
+    "能分析顺序表和链表各操作的时间复杂度",
+    "能解释头指针、头结点、循环链表和双向链表的作用"
+  ],
+  "keywords": ["顺序表", "链表", "单链表", "双向链表", "头结点"],
+  "source_refs": ["opendsa", "runestone", "the-algorithms-python"]
+}

@@ -12,6 +12,7 @@ from app.api import ai_settings_router, focus_router, home_router, learning_rout
 from app.config import Settings
 from app.db import Database
 from app.errors import ApiError
+from app.learning_knowledge.loader import load_knowledge_base
 from app.response import failure
 from app.services.ai_settings_service import AiSettingsService
 from app.static_site import configure_static_site
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = db
     app.state.settings = settings
     app.state.ai_settings_service = AiSettingsService(settings.ai_config_path)
+    app.state.knowledge_base = load_knowledge_base()
 
     app.include_router(ai_settings_router)
     app.include_router(misc_router)

@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-06-c01",
+    "name": "图的表示",
+    "definition": "邻接矩阵使用 V×V 二维数组，邻接表使用 V 个链表。前者 O(1) 判断边存在，后者 O(degree) 遍历邻居。",
+    "common_mistakes": ["稀疏图使用邻接矩阵浪费 O(V²) 空间", "邻接表中忘记存储边权值"],
+    "example": "社交网络中用户的好友关系通常用邻接表表示（稀疏图）。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-06-c02",
+    "name": "深度优先搜索（DFS）",
+    "definition": "沿着一条路径尽可能深入，无法前进时回溯。可用于检测连通分量、环、拓扑排序、强连通分量。",
+    "common_mistakes": ["递归实现未处理大图的递归深度溢出", "无向图遍历时未标记父节点导致回边误判为环"],
+    "example": "迷宫求解、数独回溯均可用 DFS。",
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "concept_id": "ds-06-c03",
+    "name": "广度优先搜索（BFS）",
+    "definition": "逐层扩展。队列维护当前层节点。首次访问到的距离即为最短距离（边权非负且相等时）。",
+    "common_mistakes": ["BFS 使用了栈而非队列", "未标记已访问节点导致无限循环"],
+    "example": "社交网络中六度分隔的验证、最短路径跳数均使用 BFS。",
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "concept_id": "ds-06-c04",
+    "name": "Dijkstra 最短路径",
+    "definition": "贪心算法。从未访问节点中选择距离源最近的节点更新其邻居。需要优先队列支持 decrease-key 或允许多次插入。",
+    "common_mistakes": ["边权为负时 Dijkstra 失效（应使用 Bellman-Ford）", "优先队列中未处理重复节点导致效率下降"],
+    "example": "导航软件计算最短路径用 Dijkstra 或 A*。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-06-c05",
+    "name": "最小生成树（MST）",
+    "definition": "连通无向图中边权和最小的生成树。Prim 算法类似 Dijkstra（按边权扩展），Kruskal 算法基于并查集（按边权排序）。",
+    "common_mistakes": ["Prim 和 Dijkstra 的优先队列比较条件混淆", "Kruskal 中并查集未做路径压缩导致性能下降"],
+    "example": "铺设最小总长的光纤网络连接所有城市。",
+    "source_refs": ["clrs", "opendsa"]
+  }
+]

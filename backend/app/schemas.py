@@ -149,3 +149,21 @@ class LearningProfileRequest(BaseModel):
 
 class LearningResourcePackageRequest(LearningProfileRequest):
     pass
+
+
+# ── Phase 2: Session-based learning ───────────────────
+
+class CreateLearningSessionRequest(BaseModel):
+    course_id: str = Field(min_length=1, max_length=64)
+    conversation: str = Field(min_length=10, max_length=4000)
+    preferred_goal: str = Field(default="", max_length=200)
+    weekly_days: int = Field(default=4, ge=1, le=7)
+    daily_minutes: int = Field(default=50, ge=10, le=300)
+    title: str | None = Field(default=None, max_length=128)
+
+
+class UpdateLearningSessionProfileRequest(BaseModel):
+    conversation: str = Field(min_length=10, max_length=4000)
+    preferred_goal: str | None = Field(default=None, max_length=200)
+    weekly_days: int | None = Field(default=None, ge=1, le=7)
+    daily_minutes: int | None = Field(default=None, ge=10, le=300)

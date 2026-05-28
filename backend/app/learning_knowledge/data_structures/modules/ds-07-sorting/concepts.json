@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-07-c01",
+    "name": "冒泡排序",
+    "definition": "反复比较相邻元素并交换，每轮将最大元素'冒泡'到末尾。O(n²) 时间，O(1) 空间，稳定排序。",
+    "common_mistakes": ["实际工程中使用冒泡排序（归并/快排/内置排序更好）", "忘记提前终止优化（某一轮无交换时已有序）"],
+    "example": "5 1 4 2 8 → 第一轮：1 4 2 5 8（5 冒泡至末尾）。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-07-c02",
+    "name": "插入排序",
+    "definition": "将未排序元素逐个插入已排序部分的正确位置。O(n²) 时间、O(1) 空间、稳定。几乎有序时接近 O(n)。",
+    "common_mistakes": ["忽略插入排序在小规模或接近有序时的实用性"],
+    "example": "手整理扑克牌的过程就是插入排序。Timsort（Python 内置）在小分区上使用插入排序。",
+    "source_refs": ["opendsa", "the-algorithms-python"]
+  },
+  {
+    "concept_id": "ds-07-c03",
+    "name": "归并排序",
+    "definition": "分治算法。递归地将数组平分，分别排序后合并两个有序子数组。O(n log n) 时间、O(n) 空间、稳定。",
+    "common_mistakes": ["合并时未处理剩余元素", "递归实现的空间复杂度分析忽略了递归栈"],
+    "example": "外部排序的核心思想来源于归并排序的多路归并。",
+    "source_refs": ["clrs", "mit-6-006"]
+  },
+  {
+    "concept_id": "ds-07-c04",
+    "name": "快速排序",
+    "definition": "选 pivot，将数组划分为 ≤ pivot 和 ≥ pivot 两部分，递归排序。平均 O(n log n)，最坏 O(n²)，不稳定。",
+    "common_mistakes": ["pivot 选第一个/最后一个元素导致在已有序数组上退化为 O(n²)", "忘记处理等于 pivot 的元素导致无限递归"],
+    "example": "随机化 pivot 或三数取中可以避免最坏情况。Python sorted() 使用 Timsort 而非快排。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-07-c05",
+    "name": "排序算法对比与选型",
+    "definition": "根据数据规模、是否几乎有序、稳定性需求和内存限制选择合适的排序算法。",
+    "common_mistakes": ["不考虑稳定性需求而随意选择排序算法", "在小数据上用归并/快排（插入排序更优）"],
+    "example": "Python 的 Timsort 结合了归并排序和插入排序的优点，稳定且自适应。",
+    "source_refs": ["clrs"]
+  }
+]

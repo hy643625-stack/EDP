@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-08-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "你需要实现一个「最近浏览记录」功能：最多保存 50 条，新记录插在最前，重复记录仅保留最新。分析需要用哪些数据结构，各操作的复杂度是多少？",
+    "answer_outline": "用 Python list 或 collections.deque 按序存储记录，用 dict/set 记录是否存在。插入新记录：先从列表中移除旧位置（O(n) 用 list，但 n≤50 可接受）→ 头部插入 → 更新 dict。更好的方案：双向链表（O(1) 删除和头插）+ 哈希表（O(1) 查找）。",
+    "target_concepts": ["ds-08-c01"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-08-e02",
+    "level": "basic",
+    "type": "code_reading",
+    "prompt": "以下代码模拟贪吃蛇移动。分析其复杂度，并提出优化方案：\n```python\nsnake = [(0, 0), (0, 1), (0, 2)]  # 头在右\ndef move(direction):\n    head = snake[-1]\n    new_head = (head[0] + direction[0], head[1] + direction[1])\n    snake.append(new_head)\n    snake.pop(0)  # 去尾\n```",
+    "answer_outline": "snake.pop(0) 是 O(n)——需要移动后续所有元素。优化：① 用 collections.deque，popleft O(1)；② 或用双端链表。其他操作（append、坐标运算）都是 O(1)。",
+    "target_concepts": ["ds-08-c02", "ds-08-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-08-e03",
+    "level": "standard",
+    "type": "code_writing",
+    "prompt": "设计一个简单的「任务调度器」：支持 add_task(priority, task)、get_next_task()（返回优先级最高的任务并删除）。用合适的数据结构实现，并分析复杂度。",
+    "answer_outline": "使用 heapq（小顶堆）。对于最大优先级，存储 (-priority, task)。add_task: O(log n)。get_next_task: O(log n)（heappop）。如果需支持修改优先级，需额外维护位置映射字典。",
+    "target_concepts": ["ds-08-c01", "ds-08-c03"],
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "exercise_id": "ds-08-e04",
+    "level": "standard",
+    "type": "short_answer",
+    "prompt": "总结本章（模块 1-7）中最常见的 5 类错误，并分析根本原因和避免方法。",
+    "answer_outline": "① 边界条件（空链表、栈空 pop）— 编写前先列出边界 case。② 复杂度误判（把 O(n) 当 O(1)）— 熟记各数据结构的操作复杂度表。③ 遍历中修改结构 — 使用迭代器安全操作或标记后处理。④ 递归基漏或错 — 先写基况再写递推。⑤ 数据结构选型错误 — 先分析操作模式再选型。",
+    "target_concepts": ["ds-08-c04"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-08-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "课程项目：实现一个「词汇频率分析器」。输入文本文件，输出词频 Top-100 列表。要求：支持忽略停用词、支持中文分词（可用 jieba 或简单规则）、结果以可视化格式输出。写出完整的数据结构选型分析。",
+    "answer_outline": "数据结构选型：① 哈希表存储词→频数 O(1) 更新。② 小顶堆维护 Top-100 O(n log k)。③ collections.Counter 快速统计。整体流程：分词 → 过滤停用词 → Counter 统计 → heap 取 Top-100 → 输出。复杂度 O(n log 100) ≈ O(n)。",
+    "target_concepts": ["ds-08-c05"],
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "exercise_id": "ds-08-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "某面试题要求'O(1) 时间获取栈中最小元素'（最小栈）。请给出设计，并解释为什么这个设计比「每次 push 后排序」更好。",
+    "answer_outline": "辅助栈法：额外维护一个 min_stack，push 时同步压入 min(新元素, min_stack 栈顶)。getMin 返回 min_stack 栈顶。所有操作 O(1)。对比排序：排序每次 push O(n log n) 且破坏栈的 LIFO 顺序。",
+    "target_concepts": ["ds-08-c01", "ds-08-c03"],
+    "source_refs": []
+  }
+]

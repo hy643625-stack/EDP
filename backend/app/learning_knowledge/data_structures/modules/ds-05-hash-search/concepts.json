@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-05-c01",
+    "name": "顺序查找",
+    "definition": "从头到尾逐个比较，直到找到目标或遍历结束。O(n) 时间，O(1) 空间。适用于无序或小数据量。",
+    "common_mistakes": ["在大数据量场景使用顺序查找", "忘记处理元素不存在的情况"],
+    "example": "Python 的 `in` 操作符在 list 上的实现就是顺序查找 O(n)。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-05-c02",
+    "name": "二分查找",
+    "definition": "在有序数组中，每次将搜索范围减半。O(log n) 时间，O(1) 空间（迭代版）。",
+    "common_mistakes": ["在无序数组上使用二分查找", "mid 计算溢出（Python 无此问题）", "边界条件 while left <= right vs while left < right 用错"],
+    "example": "Python bisect 模块实现了二分查找和插入位置查找。",
+    "source_refs": ["clrs"]
+  },
+  {
+    "concept_id": "ds-05-c03",
+    "name": "哈希函数",
+    "definition": "将任意大小的键映射为固定范围内的索引。好的哈希函数应当均匀分布、减少冲突。",
+    "common_mistakes": ["使用不可哈希的对象（如 list）做键", "自定义类未实现 __hash__ 和 __eq__"],
+    "example": "Python dict 使用内置 hash() 函数，字符串的哈希在不同进程间随机化（PYTHONHASHSEED）。",
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "concept_id": "ds-05-c04",
+    "name": "链地址法（Separate Chaining）",
+    "definition": "每个哈希槽存一个链表。冲突时新元素追加到对应槽的链表中。实现简单，但对缓存不友好。",
+    "common_mistakes": ["链表过长时退化为 O(n)", "忘记在删除时更新链表头指针"],
+    "example": "Java HashMap 在 JDK 8 中链表长度 ≥8 时转为红黑树以防退化。",
+    "source_refs": ["opendsa", "clrs"]
+  },
+  {
+    "concept_id": "ds-05-c05",
+    "name": "开放地址法（Open Addressing）",
+    "definition": "所有元素存于数组内。冲突时通过探测序列寻找下一个空槽。包括线性探测、二次探测和双重哈希。",
+    "common_mistakes": ["懒惰删除标志未正确处理导致查找提前终止", "负载因子过高时性能急剧下降"],
+    "example": "Python dict 使用开放地址法（伪随机探测），负载因子约 2/3 时触发扩容。",
+    "source_refs": ["clrs"]
+  }
+]

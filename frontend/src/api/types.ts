@@ -349,6 +349,8 @@ export interface LearningResourceCard {
   estimated_minutes: number
   agent_id: string
   content_markdown: string
+  source_refs?: string[]
+  safety_review?: LearningSafetyReview
 }
 
 export interface LearningPathStage {
@@ -363,9 +365,14 @@ export interface LearningPathStage {
 
 export interface LearningAgentRun {
   agent_id: string
-  name: string
-  status: 'completed'
-  summary: string
+  name?: string
+  status: 'completed' | 'fallback' | 'failed'
+  summary?: string
+  duration_ms?: number
+  input_summary?: string
+  output_summary?: string
+  fallback_reason?: string
+  source_refs?: string[]
 }
 
 export interface LearningEvaluationPanel {
@@ -401,6 +408,7 @@ export interface LearningResourcePackagePayload {
   runtime_message: string
   fallback_reason: string | null
   generated_at: string
+  agent_runs?: LearningAgentRun[]
 }
 
 export interface LearningWorkbenchPayload {
@@ -426,4 +434,48 @@ export interface LearningWorkbenchPayload {
     learning_path: boolean
     evaluation_panel: boolean
   }
+}
+
+// ── Phase 2: Session-based types ──────────────────────
+
+export interface LearningSessionSummary {
+  id: string
+  course_id: string
+  title: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface LearningProfileVersion {
+  version: number
+  snapshot: LearningProfileCore
+  input_summary: string
+  created_at: string
+}
+
+export interface LearningSafetyReview {
+  grounding_passed: boolean
+  warnings: string[]
+  source_refs: string[]
+}
+
+export interface LearningSessionDetail {
+  session: LearningSessionSummary
+  profile_versions: LearningProfileVersion[]
+  latest_package: LearningResourcePackagePayload | null
+  agent_runs: LearningAgentRun[]
+}
+
+export interface LearningSessionCreateResponse {
+  session: LearningSessionSummary
+  profile: LearningProfileCore
+  profile_version: number
+  course: LearningCourse
+  mode_requested: string
+  mode_used: string
+  provider_id: string | null
+  runtime_message: string
+  fallback_reason: string | null
+  generated_at: string
 }

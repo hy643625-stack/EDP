@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-06-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "在什么情况下邻接矩阵比邻接表更好？请给出具体场景和理由。",
+    "answer_outline": "稠密图（|E| 接近 |V|²）时邻接矩阵更好，无指针开销，O(1) 判断边存在。Floyd-Warshall 算法常用邻接矩阵。相反，稀疏图（如 |E| ≈ |V|）用邻接表更省空间。",
+    "target_concepts": ["ds-06-c01"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-06-e02",
+    "level": "basic",
+    "type": "code_writing",
+    "prompt": "实现图的 BFS 遍历，返回从起点到各节点的最短距离（假设无边权或边权均为 1）。",
+    "answer_outline": "用 `collections.deque` 做队列，dist 字典记录距离。初始化 dist[start]=0，BFS 遍历时 dist[neighbor] = dist[node] + 1。",
+    "target_concepts": ["ds-06-c03"],
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "exercise_id": "ds-06-e03",
+    "level": "standard",
+    "type": "short_answer",
+    "prompt": "DFS 和 BFS 各适合解决什么类型的问题？至少各举 2 个例子。",
+    "answer_outline": "DFS：拓扑排序、检测环、寻找桥和割点、生成迷宫。BFS：最短路径（无权）、层次遍历、社交网络中的距离、网络爬虫的层级控制。",
+    "target_concepts": ["ds-06-c02", "ds-06-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-06-e04",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "以下 Dijkstra 实现使用了优先队列。该实现允许同一节点多次入队。这样做有问题吗？复杂度会变差吗？\n```python\ndef dijkstra(graph, start):\n    dist = {start: 0}\n    pq = [(0, start)]  # (distance, node)\n    while pq:\n        d, u = heapq.heappop(pq)\n        if d > dist.get(u, inf): continue  # 惰性跳过\n        for v, w in graph[u]:\n            new_d = d + w\n            if new_d < dist.get(v, inf):\n                dist[v] = new_d\n                heapq.heappush(pq, (new_d, v))\n    return dist\n```",
+    "answer_outline": "没有问题。惰性跳过（lazy deletion）是正确的，因为当旧距离 > 当前最优距离时直接跳过。复杂度：堆中元素数可达 O(E)，总复杂度 O((V+E) log E) ≈ O(E log V)，可接受。",
+    "target_concepts": ["ds-06-c04"],
+    "source_refs": ["clrs"]
+  },
+  {
+    "exercise_id": "ds-06-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "实现 Kruskal 算法求最小生成树。需要一并实现并查集（Union-Find）结构，含路径压缩和按秩合并。",
+    "answer_outline": "排序所有边 → 遍历每条边，若两端点不在同一集合则选中并合并。并查集：find 递归找根 + 路径压缩，union 按秩合并。复杂度 O(E log E)。",
+    "target_concepts": ["ds-06-c05"],
+    "source_refs": ["clrs"]
+  },
+  {
+    "exercise_id": "ds-06-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "在一个有 b 个黑色节点和 w 个白色节点的图中，你需要找到一条从任意黑节点到任意白节点的最短路径。请设计算法并分析复杂度。",
+    "answer_outline": "多源 BFS：将所有黑色节点作为初始源点同时入队（距离 = 0）。BFS 过程中首次访问到白色节点时的距离即最短距离。复杂度 O(V+E)。这是多源最短路径的标准技巧。",
+    "target_concepts": ["ds-06-c03"],
+    "source_refs": ["mit-6-006"]
+  }
+]

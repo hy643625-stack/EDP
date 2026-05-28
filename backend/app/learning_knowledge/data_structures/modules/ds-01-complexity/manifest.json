@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-01-complexity",
+  "title": "复杂度与抽象数据类型",
+  "difficulty": "basic",
+  "estimated_minutes": 90,
+  "prerequisites": ["基础编程语法", "函数调用"],
+  "learning_objectives": [
+    "能区分时间复杂度和空间复杂度",
+    "能用大 O 表示常见循环结构的复杂度",
+    "能解释抽象数据类型（ADT）与具体实现的区别",
+    "能分析简单递归函数的时间复杂度"
+  ],
+  "keywords": ["复杂度", "大O", "ADT", "递归", "渐进分析"],
+  "source_refs": ["mit-6-006", "opendsa", "clrs"]
+}

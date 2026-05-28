@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-07-sorting",
+  "title": "排序算法",
+  "difficulty": "intermediate",
+  "estimated_minutes": 150,
+  "prerequisites": ["ds-02-linear-list", "ds-01-complexity", "ds-04-tree"],
+  "learning_objectives": [
+    "能实现并对比 6 种经典排序算法的复杂度和稳定性",
+    "能分析不同排序算法在有序度、数据规模和内存约束下的适用性",
+    "能解释归并排序的分治思想和快速排序的划分策略",
+    "能在合适场景选用桶排序、计数排序、基数排序等非比较排序"
+  ],
+  "keywords": ["插入排序", "冒泡排序", "选择排序", "归并排序", "快速排序", "堆排序", "稳定性"],
+  "source_refs": ["clrs", "opendsa", "the-algorithms-python"]
+}

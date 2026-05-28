@@ -1,0 +1,42 @@
+[
+  {
+    "concept_id": "ds-04-c01",
+    "name": "二叉树",
+    "definition": "每个节点最多有两个子节点（左子、右子）的树结构。是树的特例，也是最常用的树形结构。",
+    "common_mistakes": ["混淆树的度和二叉树的度", "认为二叉搜索树就是二叉树（二叉搜索树是二叉树的一种）"],
+    "example": "表达式树、决策树的底层结构通常是二叉树。",
+    "source_refs": ["opendsa"]
+  },
+  {
+    "concept_id": "ds-04-c02",
+    "name": "二叉树遍历",
+    "definition": "按特定顺序访问二叉树中每个节点恰好一次。包括前序（根左右）、中序（左根右）、后序（左右根）和层序遍历。",
+    "common_mistakes": ["递归实现时忘记处理空树", "非递归实现中栈的操作顺序错误"],
+    "example": "前序可用于复制树，中序可用于输出排序结果（BST），后序可用于删除树。",
+    "source_refs": ["runestone"]
+  },
+  {
+    "concept_id": "ds-04-c03",
+    "name": "二叉搜索树（BST）",
+    "definition": "左子树所有节点值 < 根 < 右子树所有节点值。查找、插入、删除的平均复杂度为 O(log n)。",
+    "common_mistakes": ["BST 退化为链表时复杂度恶化为 O(n)", "删除有两个子节点的节点时选错替代节点"],
+    "example": "中序遍历 BST 可得到有序序列。",
+    "source_refs": ["opendsa", "clrs"]
+  },
+  {
+    "concept_id": "ds-04-c04",
+    "name": "堆（Heap）",
+    "definition": "一种完全二叉树。小顶堆中父节点 ≤ 子节点，大顶堆中父节点 ≥ 子节点。常用于实现优先队列。",
+    "common_mistakes": ["堆不是排序的——只有根是极值", "上浮和下沉操作的方向搞反"],
+    "example": "top-k 问题用小顶堆维护 k 个最大值。",
+    "source_refs": ["clrs", "the-algorithms-python"]
+  },
+  {
+    "concept_id": "ds-04-c05",
+    "name": "哈夫曼树",
+    "definition": "带权路径长度最小的二叉树，用于数据压缩。构建方法：反复合并两个权值最小的树。",
+    "common_mistakes": ["构造过程中未用优先队列而手动排序导致效率低下", "忘记哈夫曼编码必须是前缀码"],
+    "example": "字符频率 a:40%, b:30%, c:20%, d:10%，哈夫曼编码总长度最短。",
+    "source_refs": ["clrs"]
+  }
+]

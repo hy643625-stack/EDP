@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-04-tree",
+  "title": "树与二叉树",
+  "difficulty": "intermediate",
+  "estimated_minutes": 150,
+  "prerequisites": ["ds-02-linear-list", "ds-03-stack-queue", "ds-01-complexity"],
+  "learning_objectives": [
+    "能区分树的常用术语（根、叶、深度、高度、度）",
+    "能实现二叉树的四种遍历（前序、中序、后序、层序）",
+    "能解释堆的性质及其在优先队列中的应用",
+    "能构造哈夫曼树并计算带权路径长度 WPL"
+  ],
+  "keywords": ["二叉树", "遍历", "递归", "堆", "哈夫曼树", "优先队列"],
+  "source_refs": ["opendsa", "runestone", "clrs"]
+}

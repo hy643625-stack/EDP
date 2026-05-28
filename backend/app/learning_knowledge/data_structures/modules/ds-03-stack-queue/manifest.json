@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-03-stack-queue",
+  "title": "栈与队列",
+  "difficulty": "basic",
+  "estimated_minutes": 90,
+  "prerequisites": ["ds-02-linear-list"],
+  "learning_objectives": [
+    "能解释栈 LIFO 和队列 FIFO 的特性",
+    "能用数组或链表实现栈和队列",
+    "能用栈处理括号匹配和表达式求值问题",
+    "能解释队列在 BFS 中的作用"
+  ],
+  "keywords": ["栈", "队列", "LIFO", "FIFO", "表达式求值", "BFS"],
+  "source_refs": ["opendsa", "runestone", "mit-6-006"]
+}

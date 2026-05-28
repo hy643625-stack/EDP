@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-02-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "数组和链表的区别是什么？从存储方式、访问效率和插入删除效率三方面回答。",
+    "answer_outline": "存储：数组连续内存，链表分散节点。访问：数组 O(1) 随机访问，链表 O(n)。插入删除：数组 O(n)（需移动元素），链表 O(1)（已知位置时）。",
+    "target_concepts": ["ds-02-c01", "ds-02-c02", "ds-02-c05"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-02-e02",
+    "level": "basic",
+    "type": "code_reading",
+    "prompt": "以下 Python 操作的时间复杂度分别是多少？\n```python\nnums = [1, 2, 3]\nnums.append(4)      # ①\nnums.insert(0, 0)   # ②\nnums.pop()          # ③\nnums.pop(0)         # ④\n```",
+    "answer_outline": "① O(1) 摊销，② O(n)，③ O(1)，④ O(n)。insert(0) 和 pop(0) 需要移动后续所有元素。",
+    "target_concepts": ["ds-02-c01"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-02-e03",
+    "level": "standard",
+    "type": "code_writing",
+    "prompt": "实现单链表的 `reverse()` 方法，将链表原地反转。要求 O(n) 时间、O(1) 额外空间。",
+    "answer_outline": "使用三个指针 prev、curr、next 遍历，将每个节点的 next 指向前驱。最后更新头指针。",
+    "target_concepts": ["ds-02-c02"],
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "exercise_id": "ds-02-e04",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "以下代码尝试删除单链表中值为 target 的所有节点。请指出 bug 并修复：\n```python\ndef remove_all(head, target):\n    curr = head\n    while curr:\n        if curr.val == target:\n            curr = curr.next  # 跳过\n        curr = curr.next\n    return head\n```",
+    "answer_outline": "Bug 有两处：① curr = curr.next 被执行两次（跳过节点后又走一步）；② 没有维护前驱指针，无法真正从链表中移除节点。修复需引入 prev 指针。",
+    "target_concepts": ["ds-02-c02"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-02-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "用双向链表实现一个简单的 LRU 缓存框架（不要求哈希表部分），支持 `access(key)` 将节点移到表头，`evict()` 删除表尾最久未用节点。",
+    "answer_outline": "双向链表头为最近使用，尾为最久未用。access 时从原位置摘下并插入头部（使用双向链表的 O(1) 删除和头插能力）。evict 删除尾节点。",
+    "target_concepts": ["ds-02-c03"],
+    "source_refs": ["mit-6-006"]
+  },
+  {
+    "exercise_id": "ds-02-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "在嵌入式系统内存紧张（仅有 64KB RAM）但需要管理 5000 个传感器读数记录的场景下，选顺序表还是链表？请给出理由。",
+    "answer_outline": "链表每个节点有额外的指针开销（在 64 位系统中每个指针 8 字节，双向链表每节点 16 字节的指针开销），而顺序表无指针开销。5000 个整数用数组只需 20KB 左右，且缓存局部性好。建议顺序表。",
+    "target_concepts": ["ds-02-c05"],
+    "source_refs": []
+  }
+]

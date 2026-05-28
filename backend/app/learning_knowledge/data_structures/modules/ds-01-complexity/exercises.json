@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-01-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "为什么 O(n) 和 O(2n) 通常都写作 O(n)？",
+    "answer_outline": "大 O 关注增长量级，忽略常数因子。常数 2 不影响 n 的线性增长特性。",
+    "target_concepts": ["ds-01-c01", "ds-01-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-01-e02",
+    "level": "basic",
+    "type": "single_choice",
+    "prompt": "以下哪段代码的时间复杂度是 O(n)？\nA) for i in range(n): print(i)\nB) for i in range(n): for j in range(n): print(i,j)\nC) i=n; while i>1: i=i//2\nD) 递归求斐波那契第 n 项",
+    "answer_outline": "A。单层循环每个元素执行常数操作，总时间 O(n)。",
+    "target_concepts": ["ds-01-c01"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-01-e03",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "分析以下代码的时间复杂度：\n\n```python\ndef mystery(n):\n    result = 0\n    for i in range(n):\n        j = 1\n        while j < n:\n            result += 1\n            j *= 2\n    return result\n```",
+    "answer_outline": "外层循环 n 次，内层 while j 每次翻倍所以执行 O(log n) 次。总复杂度 O(n log n)。",
+    "target_concepts": ["ds-01-c01", "ds-01-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-01-e04",
+    "level": "standard",
+    "type": "short_answer",
+    "prompt": "某算法需要长度为 n 的辅助数组和深度为 log n 的递归调用栈。请分析其空间复杂度。",
+    "answer_outline": "辅助数组贡献 O(n)，递归栈贡献 O(log n)。总空间复杂度取最大值 O(n)。",
+    "target_concepts": ["ds-01-c02", "ds-01-c05"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-01-e05",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "设计一个算法判断数组是否包含重复元素。要求：至少给出两种不同时间复杂度的解法，并分析各自适用的场景。",
+    "answer_outline": "解法一：双重循环比较 O(n²)，空间 O(1)，适合 n 很小。解法二：先排序再检查相邻 O(n log n)，空间 O(1)，适合不要求原序。解法三：哈希集合 O(n) 时间 O(n) 空间，适合内存充裕。",
+    "target_concepts": ["ds-01-c01", "ds-01-c02"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-01-e06",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "用递归实现二分查找的辅助函数，并写出其时间复杂度的递推式，用主定理求解。",
+    "answer_outline": "递推式 T(n) = T(n/2) + O(1)，a=1, b=2, f(n)=O(1)=O(n⁰)。log_b a = 0，f(n) = Θ(n⁰)，主定理情况二：T(n) = O(log n)。",
+    "target_concepts": ["ds-01-c05"],
+    "source_refs": ["clrs"]
+  }
+]

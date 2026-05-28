@@ -1,0 +1,15 @@
+{
+  "module_id": "ds-06-graph",
+  "title": "图",
+  "difficulty": "advanced",
+  "estimated_minutes": 150,
+  "prerequisites": ["ds-03-stack-queue", "ds-04-tree", "ds-01-complexity"],
+  "learning_objectives": [
+    "能区分图的表示方法（邻接矩阵、邻接表）及其适用场景",
+    "能用 DFS 和 BFS 遍历图并解决连通分量、拓扑排序等基本问题",
+    "能实现并理解 Dijkstra 最短路径算法",
+    "能解释最小生成树（Prim / Kruskal）的原理与实现"
+  ],
+  "keywords": ["图", "邻接表", "DFS", "BFS", "Dijkstra", "最短路径", "MST", "Prim", "Kruskal"],
+  "source_refs": ["mit-6-006", "clrs", "opendsa"]
+}

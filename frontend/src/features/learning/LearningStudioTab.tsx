@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, BrainCircuit, Copy, Download, GraduationCap, MapPinned, Sparkles, Wand2 } from 'lucide-react'
+import { Bot, BrainCircuit, Copy, Download, GraduationCap, MapPinned, PlusCircle, Sparkles, Wand2 } from 'lucide-react'
 
 import { api } from '@/api/client'
 import type {
+  LearningAgentRun,
   LearningCourse,
   LearningProfilePayload,
   LearningResourcePackagePayload,
@@ -16,7 +17,7 @@ import {
   saveLearningStudioDraft
 } from '@/lib/learningStudio'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../../packages/ui/src'
-import { SimpleMarkdown } from './SimpleMarkdown'
+import { ResourceCard } from './ResourceCard'
 
 type LearningStudioTabProps = {
   onOpenAiSettings: () => void
@@ -24,6 +25,19 @@ type LearningStudioTabProps = {
 
 function runtimeModeLabel(modeUsed: 'local_rules' | 'model'): string {
   return modeUsed === 'model' ? 'AI 模型增强' : '本地规则生成'
+}
+
+function agentStatusBadge(status: string) {
+  switch (status) {
+    case 'completed':
+      return <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">已完成</span>
+    case 'fallback':
+      return <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">降级</span>
+    case 'failed':
+      return <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700">失败</span>
+    default:
+      return <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">待执行</span>
+  }
 }
 
 export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) {
@@ -42,6 +56,12 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
   const [copied, setCopied] = useState(false)
   const [exported, setExported] = useState(false)
   const hydratedRef = useRef(false)
+
+  // Phase 2: Session state
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [profileVersion, setProfileVersion] = useState<number>(0)
+  const [sessionTitle, setSessionTitle] = useState<string>('')
+  const [agentRuns, setAgentRuns] = useState<LearningAgentRun[]>([])
 
   const courses = workbench?.courses ?? []
   const selectedCourse = useMemo<LearningCourse | null>(
@@ -89,6 +109,15 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
     }
   }
 
+  function resetSession() {
+    setSessionId(null)
+    setProfileVersion(0)
+    setSessionTitle('')
+    setAgentRuns([])
+    setProfile(null)
+    setResourcePackage(null)
+  }
+
   async function handleBuildProfile() {
     if (!courseId || !conversation.trim()) {
       setError('请先选择课程并输入学习描述。')
@@ -96,14 +125,28 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
     }
     setBuildingProfile(true)
     try {
-      const payload = await api.buildLearningProfile({
+      // Phase 2: create session instead of old profile endpoint
+      const result = await api.createLearningSession({
         course_id: courseId,
         conversation,
         preferred_goal: preferredGoal,
         weekly_days: weeklyDays,
-        daily_minutes: dailyMinutes
+        daily_minutes: dailyMinutes,
+        title: `${selectedCourse?.title || '学习'} - ${new Date().toLocaleDateString('zh-CN')}`,
       })
-      setProfile(payload)
+      setSessionId(result.session?.id || null)
+      setProfileVersion(result.profile_version || 1)
+      setSessionTitle(result.session?.title || '')
+      setProfile({
+        course: result.course,
+        profile: result.profile,
+        mode_requested: result.mode_requested as LearningProfilePayload['mode_requested'],
+        mode_used: (result.mode_used || 'local_rules') as LearningProfilePayload['mode_used'],
+        provider_id: result.provider_id,
+        runtime_message: result.runtime_message,
+        fallback_reason: result.fallback_reason,
+        generated_at: result.generated_at,
+      })
       setError('')
     } catch (raw) {
       setError(raw instanceof Error ? raw.message : String(raw))
@@ -119,13 +162,20 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
     }
     setBuildingPackage(true)
     try {
-      const payload = await api.generateLearningResourcePackage({
-        course_id: courseId,
-        conversation,
-        preferred_goal: preferredGoal,
-        weekly_days: weeklyDays,
-        daily_minutes: dailyMinutes
-      })
+      let payload: LearningResourcePackagePayload
+      if (sessionId) {
+        // Phase 2: use session-based pipeline
+        payload = await api.generateSessionResourcePackage(sessionId)
+      } else {
+        // Fallback: old API
+        payload = await api.generateLearningResourcePackage({
+          course_id: courseId,
+          conversation,
+          preferred_goal: preferredGoal,
+          weekly_days: weeklyDays,
+          daily_minutes: dailyMinutes,
+        })
+      }
       setProfile({
         course: payload.course,
         profile: payload.profile,
@@ -134,9 +184,15 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
         provider_id: payload.provider_id,
         runtime_message: payload.runtime_message,
         fallback_reason: payload.fallback_reason,
-        generated_at: payload.generated_at
+        generated_at: payload.generated_at,
       })
       setResourcePackage(payload)
+      // Capture agent runs from response
+      const agentRunsField = (payload as unknown as Record<string, unknown>).agent_runs
+      if (Array.isArray(agentRunsField)) setAgentRuns(agentRunsField as LearningAgentRun[])
+      // Also check package.agent_runs
+      const pkgRuns = payload.package?.agent_runs
+      if (pkgRuns && pkgRuns.length > 0) setAgentRuns(pkgRuns as LearningAgentRun[])
       setError('')
     } catch (raw) {
       setError(raw instanceof Error ? raw.message : String(raw))
@@ -165,6 +221,20 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
+      {/* ── Session status bar ── */}
+      {sessionId ? (
+        <div className="lg:col-span-12 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">当前会话</span>
+            <span className="text-sm font-medium text-slate-800">{sessionTitle}</span>
+            <span className="text-xs text-slate-500">画像 v{profileVersion}</span>
+          </div>
+          <Button variant="ghost" size="sm" iconLeft={<PlusCircle className="h-4 w-4" />} onClick={resetSession}>
+            新建会话
+          </Button>
+        </div>
+      ) : null}
+
       <Card className="lg:col-span-12">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -251,7 +321,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
                 ))}
               </div>
               <div className="mt-4 space-y-2">
-                {(selectedCourse?.modules || []).slice(0, 6).map((module) => (
+                {(selectedCourse?.modules || []).slice(0, 8).map((module) => (
                   <div key={module.module_id} className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-sm font-medium text-slate-800">{module.title}</p>
                     <p className="mt-1 text-xs text-slate-500">{module.core_points.join(' / ')}</p>
@@ -260,18 +330,34 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
               </div>
             </div>
 
+            {/* ── Agent runs panel ── */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-semibold text-slate-600">多智能体协同链路</p>
               <div className="mt-3 space-y-2">
-                {(resourcePackage?.package.agent_runs || workbench?.agents || []).map((agent) => (
+                {(agentRuns.length > 0 ? agentRuns : (workbench?.agents || [])).map((agent) => (
                   <div key={agent.agent_id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-slate-900">{agent.name}</p>
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
-                        {'status' in agent ? '已执行' : '待执行'}
-                      </span>
+                      <p className="text-sm font-medium text-slate-900">
+                        {'name' in agent ? agent.name : agent.agent_id}
+                      </p>
+                      {'status' in agent
+                        ? agentStatusBadge(agent.status)
+                        : <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">待执行</span>
+                      }
                     </div>
-                    <p className="mt-1 text-xs leading-6 text-slate-500">{'summary' in agent ? agent.summary : agent.responsibility}</p>
+                    {'duration_ms' in agent && agent.duration_ms ? (
+                      <p className="mt-1 text-[11px] text-slate-400">{agent.duration_ms}ms</p>
+                    ) : null}
+                    <p className="mt-1 text-xs leading-6 text-slate-500">
+                      {'output_summary' in agent && agent.output_summary
+                        ? agent.output_summary
+                        : 'summary' in agent ? agent.summary
+                        : 'responsibility' in agent ? agent.responsibility
+                        : ''}
+                    </p>
+                    {'fallback_reason' in agent && agent.fallback_reason ? (
+                      <p className="mt-1 text-[11px] text-amber-600">降级原因：{agent.fallback_reason}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -286,6 +372,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
             <CardTitle className="inline-flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-500" />
               学习画像
+              {profileVersion > 0 ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">v{profileVersion}</span> : null}
             </CardTitle>
             <p className="mt-1 text-sm text-slate-500">{profile.profile.overview}</p>
           </CardHeader>
@@ -344,18 +431,16 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
             </CardHeader>
             <CardContent className="grid gap-4 xl:grid-cols-2">
               {resourcePackage.package.resources.map((resource) => (
-                <div key={resource.resource_id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{resource.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">{resource.summary}</p>
-                    </div>
-                    <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">{resource.estimated_minutes} 分钟</span>
-                  </div>
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                    <SimpleMarkdown content={resource.content_markdown} />
-                  </div>
-                </div>
+                <ResourceCard
+                  key={resource.resource_id}
+                  type={resource.type}
+                  title={resource.title}
+                  summary={resource.summary}
+                  estimatedMinutes={resource.estimated_minutes}
+                  contentMarkdown={resource.content_markdown}
+                  sourceRefs={resource.source_refs}
+                  safetyReview={resource.safety_review}
+                />
               ))}
             </CardContent>
           </Card>

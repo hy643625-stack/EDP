@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-05-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "顺序查找和二分查找分别适用于什么场景？从数据是否有序、数据规模和操作频率三方面说明。",
+    "answer_outline": "顺序查找：无序数据、小规模、偶尔查找。二分查找：有序数据、频繁查找、允许预处理排序成本。",
+    "target_concepts": ["ds-05-c01", "ds-05-c02"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-05-e02",
+    "level": "basic",
+    "type": "code_writing",
+    "prompt": "用迭代和递归两种方式实现二分查找。",
+    "answer_outline": "迭代版：while left <= right 循环。递归版：检查 mid 后递归调用左半或右半。两者均为 O(log n) 时间，迭代 O(1) 空间，递归 O(log n) 空间（调用栈）。",
+    "target_concepts": ["ds-05-c02"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-05-e03",
+    "level": "standard",
+    "type": "single_choice",
+    "prompt": "哈希表中，以下哪种情况会导致性能退化？\nA) 负载因子过大 B) 哈希函数均匀 C) 使用素数作为表大小 D) 定期 rehash",
+    "answer_outline": "A。负载因子过大会导致冲突频繁，查找接近 O(n)。均匀哈希和素数表大小是好的实践。",
+    "target_concepts": ["ds-05-c03", "ds-05-c04", "ds-05-c05"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-05-e04",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "分析以下代码的输出：\n```python\nd = {}\nd[1] = 'a'\nd[True] = 'b'\nd[1.0] = 'c'\nprint(d)\n```\n提示：Python 中 1 == True == 1.0 的哈希值相同。",
+    "answer_outline": "因为 1、True 和 1.0 的哈希值相同且相等，后续赋值会覆盖前一个值。输出 {1: 'c'}。这展示了 Python dict 的键唯一性基于 __hash__ 和 __eq__。",
+    "target_concepts": ["ds-05-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-05-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "从零实现一个链地址法哈希表，支持 put(key, value)、get(key)、delete(key)。要求处理字符串键，支持动态扩容（负载因子 > 2 时翻倍并 rehash）。",
+    "answer_outline": "使用 list 作为槽数组，每个槽是 (key, value) 链表。put 时若 key 已存在则更新值。rehash 时遍历所有槽和链表元素重新插入。",
+    "target_concepts": ["ds-05-c03", "ds-05-c04"],
+    "source_refs": ["opendsa"]
+  },
+  {
+    "exercise_id": "ds-05-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "在 1000 万个整数的集合中判断一个数是否存在。有三种方案：① 顺序查找（list）② 二分查找（sorted list）③ 哈希表（set/dict）。请分析各方案的预处理成本、单次查找成本和适用场景。",
+    "answer_outline": "① 无预处理，查找 O(n)，仅适合一次性少量查询。② 需先排序 O(n log n)，每次查找 O(log n)，适合数据不变、查询极多。③ 插入 O(n)（建表），每次查找 O(1)，适合动态数据、频繁查询，内存代价约是数组的 2-3 倍。",
+    "target_concepts": ["ds-05-c01", "ds-05-c02", "ds-05-c03"],
+    "source_refs": ["clrs"]
+  }
+]

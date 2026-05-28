@@ -91,6 +91,57 @@ SCHEMA_STATEMENTS = [
         FOREIGN KEY (task_id) REFERENCES task_main(task_id) ON DELETE CASCADE
     );
     """,
+    # ── Learning module tables ──────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS learning_sessions (
+        id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL,
+        title TEXT DEFAULT '',
+        conversation TEXT DEFAULT '',
+        preferred_goal TEXT DEFAULT '',
+        weekly_days INTEGER DEFAULT 4,
+        daily_minutes INTEGER DEFAULT 50,
+        status TEXT DEFAULT 'active',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS learning_profile_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        snapshot_json TEXT NOT NULL,
+        input_summary TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES learning_sessions(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS learning_resource_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        package_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES learning_sessions(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS learning_agent_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed',
+        duration_ms INTEGER DEFAULT 0,
+        input_summary TEXT DEFAULT '',
+        output_summary TEXT DEFAULT '',
+        fallback_reason TEXT DEFAULT '',
+        source_refs_json TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES learning_sessions(id)
+    );
+    """,
 ]
 
 DEFAULT_ATTRS = [

@@ -3,12 +3,15 @@ from __future__ import annotations
 import copy
 import json
 import re
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 
 from app.errors import ApiError
+from app.learning_knowledge.loader import KnowledgeBase
 from app.services.ai_settings_service import AiSettingsService
 
 LEARNING_PRIVACY_NOTICE = (
@@ -36,58 +39,7 @@ PROFILE_DIMENSION_CATALOG: list[dict[str, str]] = [
     {"key": "support", "label": "支持策略"},
 ]
 
-COURSE_CATALOG: list[dict[str, Any]] = [
-    {
-        "course_id": "python_programming",
-        "title": "Python 程序设计",
-        "category": "编程基础",
-        "difficulty": "入门到进阶",
-        "summary": "覆盖语法、函数、数据结构、文件处理、面向对象与小项目实践。",
-        "tags": ["编程", "自动化", "项目"],
-        "modules": [
-            {"module_id": "py-01", "title": "基础语法", "core_points": ["变量", "数据类型", "输入输出"], "outcome": "能写简单脚本。"},
-            {"module_id": "py-02", "title": "流程与函数", "core_points": ["分支", "循环", "函数"], "outcome": "能封装重复逻辑。"},
-            {"module_id": "py-03", "title": "列表字典集合", "core_points": ["序列", "映射", "推导式"], "outcome": "能组织中等规模数据。"},
-            {"module_id": "py-04", "title": "文件与异常", "core_points": ["文件读写", "JSON", "异常处理"], "outcome": "能完成稳定的数据读写。"},
-            {"module_id": "py-05", "title": "面向对象", "core_points": ["类", "继承", "组合"], "outcome": "能做基础对象建模。"},
-            {"module_id": "py-06", "title": "项目实战", "core_points": ["模块化", "调试", "脚本实战"], "outcome": "能完成小型项目。"},
-        ],
-    },
-    {
-        "course_id": "data_structures",
-        "title": "数据结构与算法",
-        "category": "计算机核心课",
-        "difficulty": "中级",
-        "summary": "围绕线性结构、树、图、查找排序和复杂度分析建立课程主线。",
-        "tags": ["算法", "面试", "计算思维"],
-        "modules": [
-            {"module_id": "ds-01", "title": "复杂度与 ADT", "core_points": ["时间复杂度", "空间复杂度", "抽象数据类型"], "outcome": "能分析算法开销。"},
-            {"module_id": "ds-02", "title": "线性表栈队列", "core_points": ["顺序表", "链表", "栈队列"], "outcome": "能手写基本操作。"},
-            {"module_id": "ds-03", "title": "树与二叉树", "core_points": ["遍历", "递归", "哈夫曼树"], "outcome": "能分析树形问题。"},
-            {"module_id": "ds-04", "title": "图结构", "core_points": ["DFS/BFS", "最短路", "最小生成树"], "outcome": "能用图模型解题。"},
-            {"module_id": "ds-05", "title": "查找结构", "core_points": ["二叉排序树", "AVL", "哈希"], "outcome": "能比较查找方案。"},
-            {"module_id": "ds-06", "title": "排序与综合应用", "core_points": ["归并", "快排", "题型串联"], "outcome": "能完成综合题。"},
-        ],
-    },
-    {
-        "course_id": "advanced_math",
-        "title": "高等数学",
-        "category": "数学基础课",
-        "difficulty": "基础到强化",
-        "summary": "覆盖极限、导数、积分、多元微积分与级数，适合期末与考研复盘。",
-        "tags": ["数学", "考研", "理论"],
-        "modules": [
-            {"module_id": "am-01", "title": "极限与连续", "core_points": ["函数", "极限", "连续"], "outcome": "能判断连续与极限行为。"},
-            {"module_id": "am-02", "title": "导数与微分", "core_points": ["导数定义", "求导法则", "微分"], "outcome": "能完成一元求导。"},
-            {"module_id": "am-03", "title": "导数应用", "core_points": ["单调性", "极值", "中值定理"], "outcome": "能分析函数图像。"},
-            {"module_id": "am-04", "title": "积分基础", "core_points": ["换元", "分部积分", "定积分"], "outcome": "能处理核心积分题。"},
-            {"module_id": "am-05", "title": "多元微积分", "core_points": ["偏导", "全微分", "极值"], "outcome": "能分析二元函数。"},
-            {"module_id": "am-06", "title": "级数与综合复盘", "core_points": ["收敛性", "幂级数", "综合题"], "outcome": "能完成综合复盘。"},
-        ],
-    },
-]
-
-COURSE_INDEX = {course["course_id"]: course for course in COURSE_CATALOG}
+COURSE_INDEX = {}  # replaced by KnowledgeBase; kept for migration compatibility
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -114,12 +66,20 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
 
 
 class LearningAgentService:
-    def __init__(self, ai_settings_service: AiSettingsService) -> None:
+    def __init__(
+        self,
+        ai_settings_service: AiSettingsService,
+        kb: KnowledgeBase | None = None,
+        repo: Any | None = None,  # LearningRepository, optional for session persistence
+    ) -> None:
         self.ai_settings_service = ai_settings_service
+        self.kb = kb
+        self.repo = repo
 
     def get_workbench_payload(self) -> dict[str, Any]:
+        courses = self._build_course_list()
         return {
-            "courses": [self._serialize_course_summary(course) for course in COURSE_CATALOG],
+            "courses": courses,
             "agents": copy.deepcopy(LEARNING_AGENTS),
             "profile_dimensions": copy.deepcopy(PROFILE_DIMENSION_CATALOG),
             "privacy_notice": LEARNING_PRIVACY_NOTICE,
@@ -132,31 +92,57 @@ class LearningAgentService:
             },
         }
 
-    def _serialize_course_summary(self, course: dict[str, Any]) -> dict[str, Any]:
+    def _build_course_list(self) -> list[dict[str, Any]]:
+        courses: list[dict[str, Any]] = []
+        if self.kb is not None:
+            for course_id in self.kb.course_ids():
+                course_info = self.kb.get_course(course_id)
+                if course_info is None:
+                    continue
+                courses.append(self._serialize_kb_course(course_info))
+        # Fallback: add Python + Advanced Math from hardcoded backup
+        if "python_programming" not in {c["course_id"] for c in courses}:
+            courses.append(_FALLBACK_PYTHON_COURSE)
+        if "advanced_math" not in {c["course_id"] for c in courses}:
+            courses.append(_FALLBACK_ADVANCED_MATH_COURSE)
+        return courses
+
+    def _serialize_kb_course(self, course_info) -> dict[str, Any]:
+        modules: list[dict[str, Any]] = []
+        for mid in course_info.module_ids:
+            module = self.kb.get_module(mid) if self.kb else None
+            if module is None:
+                continue
+            concepts = self.kb.concept_list(mid) if self.kb else []
+            modules.append({
+                "module_id": module.module_id,
+                "title": module.title,
+                "core_points": [c["name"] for c in concepts[:3]],
+                "outcome": module.learning_objectives[-1] if module.learning_objectives else "",
+            })
         return {
-            "course_id": course["course_id"],
-            "title": course["title"],
-            "category": course["category"],
-            "difficulty": course["difficulty"],
-            "summary": course["summary"],
-            "tags": list(course["tags"]),
-            "module_count": len(course["modules"]),
-            "modules": [
-                {
-                    "module_id": module["module_id"],
-                    "title": module["title"],
-                    "core_points": list(module["core_points"]),
-                    "outcome": module["outcome"],
-                }
-                for module in course["modules"]
-            ],
+            "course_id": course_info.course_id,
+            "title": course_info.title,
+            "category": "计算机核心课",
+            "difficulty": "中级",
+            "summary": course_info.summary,
+            "tags": [],
+            "module_count": len(modules),
+            "modules": modules,
         }
 
     def _get_course(self, course_id: str) -> dict[str, Any]:
-        course = COURSE_INDEX.get(course_id.strip())
-        if course is None:
-            raise ApiError("BAD_REQUEST", f"未知课程：{course_id}", 422)
-        return course
+        cid = course_id.strip()
+        # Try KB first
+        if self.kb is not None:
+            course_info = self.kb.get_course(cid)
+            if course_info is not None:
+                return self._serialize_kb_course(course_info)
+        # Fallback
+        fallback = _FALLBACK_COURSE_MAP.get(cid)
+        if fallback is not None:
+            return dict(fallback)
+        raise ApiError("BAD_REQUEST", f"未知课程：{course_id}", 422)
 
     def _normalize_conversation(self, conversation: str) -> str:
         normalized = " ".join(conversation.strip().split())
@@ -177,7 +163,7 @@ class LearningAgentService:
         profile = self._build_profile_core(course, normalized_conversation, preferred_goal, weekly_days, daily_minutes)
         execution_plan = self.ai_settings_service.get_execution_plan()
         return {
-            "course": self._serialize_course_summary(course),
+            "course": course,
             "profile": profile,
             "mode_requested": execution_plan["mode"],
             "mode_used": "local_rules",
@@ -216,7 +202,7 @@ class LearningAgentService:
             fallback_reason = "当前 AI 配置尚未就绪，已自动回退到本地规则算法。"
 
         return {
-            "course": self._serialize_course_summary(course),
+            "course": course,
             "profile": profile,
             "package": package,
             "mode_requested": execution_plan["mode"],
@@ -226,6 +212,338 @@ class LearningAgentService:
             "fallback_reason": fallback_reason,
             "generated_at": self._utc_now_iso(),
         }
+
+    # ═══════════════════════════════════════════════════════
+    # Phase 2: Session-based learning
+    # ═══════════════════════════════════════════════════════
+
+    def create_learning_session(
+        self,
+        course_id: str,
+        conversation: str,
+        preferred_goal: str = "",
+        weekly_days: int = 4,
+        daily_minutes: int = 50,
+        title: str = "",
+    ) -> dict[str, Any]:
+        """Create a session, generate profile v1, persist everything."""
+        course = self._get_course(course_id)
+        normalized = self._normalize_conversation(conversation)
+        profile = self._build_profile_core(course, normalized, preferred_goal, weekly_days, daily_minutes)
+        input_summary = normalized[:200]
+
+        if self.repo is None:
+            sid = f"ephemeral-{self._utc_now_iso()}"
+            return {
+                "session": {"id": sid, "course_id": course_id, "title": title or course["title"],
+                 "status": "active", "created_at": self._utc_now_iso(), "updated_at": self._utc_now_iso()},
+                "profile": profile,
+                "profile_version": 1,
+                "course": course,
+            }
+
+        session = self.repo.create_session(
+            course_id=course_id, conversation=normalized,
+            preferred_goal=preferred_goal, weekly_days=weekly_days,
+            daily_minutes=daily_minutes, title=title or course["title"],
+        )
+        self.repo.create_profile_version(
+            session["id"], {"overview": profile["overview"], "dimensions": profile["dimensions"],
+            "strengths": profile["strengths"], "risks": profile["risks"],
+            "follow_up_questions": profile["follow_up_questions"],
+            "focus_modules": profile["focus_modules"],
+            "weekly_days": profile["weekly_days"], "daily_minutes": profile["daily_minutes"]},
+            input_summary=input_summary,
+        )
+        return {
+            "session": session,
+            "profile": profile,
+            "profile_version": 1,
+            "course": course,
+        }
+
+    def update_session_profile(
+        self,
+        session_id: str,
+        conversation: str,
+        preferred_goal: str | None = None,
+        weekly_days: int | None = None,
+        daily_minutes: int | None = None,
+    ) -> dict[str, Any]:
+        """Append conversation to session, generate new profile version."""
+        session = self._require_session(session_id)
+        course = self._get_course(session["course_id"])
+        merged_conversation = (session.get("conversation", "") + " " + conversation).strip()
+        goal = preferred_goal or session.get("preferred_goal", "")
+        wd = weekly_days if weekly_days is not None else session.get("weekly_days", 4)
+        dm = daily_minutes if daily_minutes is not None else session.get("daily_minutes", 50)
+        profile = self._build_profile_core(course, merged_conversation, goal, wd, dm)
+        input_summary = conversation[:200]
+
+        if self.repo is not None:
+            self.repo.update_session(session_id, conversation=merged_conversation,
+                                     preferred_goal=goal, weekly_days=wd, daily_minutes=dm)
+            pv = self.repo.create_profile_version(
+                session_id,
+                {"overview": profile["overview"], "dimensions": profile["dimensions"],
+                 "strengths": profile["strengths"], "risks": profile["risks"],
+                 "follow_up_questions": profile["follow_up_questions"],
+                 "focus_modules": profile["focus_modules"],
+                 "weekly_days": profile["weekly_days"], "daily_minutes": profile["daily_minutes"]},
+                input_summary=input_summary,
+            )
+            return {"profile": profile, "profile_version": pv["version"], "course": course}
+        return {"profile": profile, "profile_version": 1, "course": course}
+
+    def generate_session_package(self, session_id: str) -> dict[str, Any]:
+        """Run agent pipeline and persist the resource package."""
+        session = self._require_session(session_id)
+        course = self._get_course(session["course_id"])
+        conversation = session.get("conversation", "")
+        goal = session.get("preferred_goal", "")
+        wd = session.get("weekly_days", 4)
+        dm = session.get("daily_minutes", 50)
+        profile = self._build_profile_core(course, conversation, goal, wd, dm)
+        package, agent_runs = self._run_agent_pipeline(course, profile, conversation, session_id)
+        execution_plan = self.ai_settings_service.get_execution_plan()
+
+        result = {
+            "course": course,
+            "profile": profile,
+            "package": package,
+            "agent_runs": agent_runs,
+            "mode_requested": execution_plan["mode"],
+            "mode_used": "local_rules",
+            "provider_id": execution_plan["provider_id"],
+            "runtime_message": execution_plan["runtime_message"],
+            "fallback_reason": None,
+            "generated_at": self._utc_now_iso(),
+        }
+        if self.repo is not None:
+            self.repo.create_package(session_id, result)
+        return result
+
+    def get_session_detail(self, session_id: str) -> dict[str, Any]:
+        """Return session + profile versions + latest package + agent runs."""
+        session = self._require_session(session_id)
+        detail: dict[str, Any] = {"session": session}
+        if self.repo is not None:
+            detail["profile_versions"] = self.repo.get_profile_versions(session_id)
+            detail["latest_package"] = self.repo.get_latest_package(session_id)
+            detail["agent_runs"] = self.repo.get_agent_runs(session_id)
+        else:
+            detail["profile_versions"] = []
+            detail["latest_package"] = None
+            detail["agent_runs"] = []
+        return detail
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        if self.repo is None:
+            return []
+        return self.repo.list_sessions()
+
+    def _require_session(self, session_id: str) -> dict[str, Any]:
+        if self.repo is None:
+            raise ApiError("NOT_FOUND", "会话功能不可用（数据库未初始化）", 404)
+        session = self.repo.get_session(session_id)
+        if session is None:
+            raise ApiError("NOT_FOUND", f"会话不存在：{session_id}", 404)
+        return session
+
+    # ═══════════════════════════════════════════════════════
+    # Agent pipeline + runner + safety
+    # ═══════════════════════════════════════════════════════
+
+    @contextmanager
+    def _agent_run(self, session_id: str | None, agent_id: str, input_summary: str) -> Iterator[dict[str, Any]]:
+        """Context manager: records agent start/status/duration/source_refs."""
+        started = time.perf_counter()
+        run_record: dict[str, Any] = {
+            "agent_id": agent_id, "status": "completed", "duration_ms": 0,
+            "input_summary": input_summary[:200], "output_summary": "",
+            "fallback_reason": "", "source_refs": [],
+        }
+        try:
+            yield run_record
+        except Exception as exc:
+            run_record["status"] = "fallback"
+            run_record["fallback_reason"] = str(exc)[:200]
+        finally:
+            run_record["duration_ms"] = int((time.perf_counter() - started) * 1000)
+            if self.repo is not None and session_id:
+                self.repo.create_agent_run(
+                    session_id, agent_id, run_record["status"],
+                    duration_ms=run_record["duration_ms"],
+                    input_summary=run_record["input_summary"][:200],
+                    output_summary=run_record["output_summary"][:200],
+                    fallback_reason=run_record["fallback_reason"],
+                    source_refs=run_record.get("source_refs", []),
+                )
+
+    def _run_agent_pipeline(
+        self, course: dict[str, Any], profile: dict[str, Any],
+        conversation: str, session_id: str | None = None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Execute the full agent DAG and record all runs."""
+        focus_modules = profile["focus_modules"]
+        module_titles = [m["title"] for m in focus_modules]
+        course_id = course.get("course_id", "")
+        agent_runs: list[dict[str, Any]] = []
+
+        # Agent 1: Profiler
+        with self._agent_run(session_id, "profiler", f"分析画像: {profile['overview'][:150]}") as run:
+            risks = profile.get("risks", [])
+            strengths = profile.get("strengths", [])
+            run["output_summary"] = f"识别 {len(risks)} 条风险和 {len(strengths)} 条优势"
+            agent_runs.append(dict(run))
+
+        # Agent 2: Planner
+        with self._agent_run(session_id, "planner", f"规划路径: {', '.join(module_titles[:3])}") as run:
+            learning_path = self._build_learning_path(profile, focus_modules)
+            run["output_summary"] = f"{len(learning_path)} 阶段路径"
+            agent_runs.append(dict(run))
+
+        # Agent 3: Explainer
+        with self._agent_run(session_id, "explainer", f"讲解: {focus_modules[0]['title']}") as run:
+            resource = self._build_course_brief(
+                course, profile, focus_modules,
+                self._kb_module_contents(course_id, focus_modules, "lecture.md"),
+                self._kb_sources(course_id),
+            )
+            run["output_summary"] = resource.get("summary", "")[:200]
+            run["source_refs"] = resource.get("source_refs", [])
+            agent_runs.append(dict(run))
+
+        # Agent 4: Practice
+        with self._agent_run(session_id, "practice", f"练习: {', '.join(module_titles[:2])}") as run:
+            practice = self._build_practice_pack(
+                course, profile, focus_modules,
+                self._kb_module_exercises(course_id, focus_modules),
+                self._kb_sources(course_id),
+            )
+            run["output_summary"] = practice.get("summary", "")[:200]
+            run["source_refs"] = practice.get("source_refs", [])
+            agent_runs.append(dict(run))
+
+        # Agent 5: Curator
+        with self._agent_run(session_id, "curator", f"策展: {', '.join(module_titles[:3])}") as run:
+            mind_map = self._build_mind_map(
+                course, profile, focus_modules,
+                self._kb_module_concepts(course_id, focus_modules),
+                self._kb_sources(course_id),
+            )
+            reading_guide = self._build_reading_guide(
+                course, profile, focus_modules, self._kb_sources(course_id),
+            )
+            case_lab = self._build_case_lab(
+                course, profile, focus_modules[0], focus_modules[-1],
+                self._kb_module_contents(course_id, focus_modules, "lab.md"),
+                self._kb_sources(course_id),
+            )
+            run["output_summary"] = "脑图+阅读指南+实验任务"
+            agent_runs.append(dict(run))
+
+        # Agent 6: Coach
+        with self._agent_run(session_id, "coach", "评估: 复盘清单") as run:
+            review = self._build_review_sheet(
+                course, profile, focus_modules,
+                self._kb_module_concepts(course_id, focus_modules),
+                self._kb_sources(course_id),
+            )
+            run["output_summary"] = review.get("summary", "")[:200]
+            agent_runs.append(dict(run))
+
+        # Assemble package with safety reviews
+        resources = [resource, mind_map, practice, reading_guide, case_lab, review]
+        for r in resources:
+            if "safety_review" not in r:
+                r["safety_review"] = self._build_safety_review(r)
+            r["display"] = self._get_display_meta(r.get("type", ""))
+            self._validate_markdown_quality(r)
+
+        package = {
+            "package_overview": (
+                f"本次资源包围绕《{course['title']}》的 {len(focus_modules)} 个核心模块展开，"
+                f"优先覆盖 {module_titles[0]} 到 {module_titles[-1]} 的主线内容。"
+            ),
+            "coach_message": (
+                f"先按「{profile['dimensions'][0]['value']} + {profile['dimensions'][3]['value']}」的组合推进。"
+                "如果连续两次出现任务积压，就先缩小当天目标。"
+            ),
+            "resource_count": 6,
+            "resources": resources,
+            "learning_path": learning_path,
+            "agent_runs": agent_runs,
+            "evaluation": self._build_evaluation_panel(course, focus_modules),
+            "source_digest": {
+                "conversation_excerpt": conversation[:180],
+                "focus_module_titles": module_titles,
+            },
+        }
+        return package, agent_runs
+
+    def _build_safety_review(self, resource: dict[str, Any]) -> dict[str, Any]:
+        """Validate grounding of a resource card against knowledge base."""
+        source_refs = resource.get("source_refs", [])
+        has_module_ref = any(ref.startswith("module:") for ref in source_refs)
+        has_self_authored = any(ref.startswith("origin:self_authored") for ref in source_refs)
+        warnings: list[str] = []
+        if not has_module_ref and not has_self_authored:
+            warnings.append("资源未标注任何知识库模块引用或自编声明")
+        return {
+            "grounding_passed": has_module_ref or has_self_authored,
+            "warnings": warnings,
+            "source_refs": source_refs,
+        }
+
+    # ── Display metadata ────────────────────────────────
+
+    _DISPLAY_META: dict[str, dict[str, str]] = {
+        "course_brief":  {"icon": "book-open",     "accent": "sky",     "layout": "article",       "density": "comfortable"},
+        "mind_map":      {"icon": "map",           "accent": "violet",  "layout": "structure",      "density": "compact"},
+        "practice_pack": {"icon": "list-checks",   "accent": "emerald", "layout": "question-card",  "density": "comfortable"},
+        "reading_guide": {"icon": "file-text",     "accent": "amber",   "layout": "resource-list",  "density": "comfortable"},
+        "case_lab":      {"icon": "code-2",        "accent": "rose",    "layout": "lab-manual",     "density": "comfortable"},
+        "review_sheet":  {"icon": "clipboard-list","accent": "teal",    "layout": "checklist",      "density": "compact"},
+    }
+
+    @classmethod
+    def _get_display_meta(cls, resource_type: str) -> dict[str, str]:
+        return cls._DISPLAY_META.get(resource_type, {"icon": "book-open", "accent": "slate", "layout": "article", "density": "comfortable"})
+
+    # ── Markdown quality validation ─────────────────────
+
+    @staticmethod
+    def _validate_markdown_quality(resource: dict[str, Any]) -> None:
+        """Run lightweight checks on generated Markdown. Appends warnings to safety_review."""
+        md = resource.get("content_markdown", "")
+        sr = resource.get("safety_review", {})
+        warnings: list[str] = list(sr.get("warnings", []))
+        rtype = resource.get("type", "")
+
+        # Must have at least one H1
+        if "# " not in md:
+            warnings.append("Markdown 缺少一级标题")
+
+        # Must have at least two H2
+        if md.count("\n## ") < 2:
+            warnings.append("Markdown 二级标题不足（至少需 2 个）")
+
+        # No raw HTML
+        if "<div" in md or "<span" in md or "<table" in md or "<style" in md:
+            warnings.append("Markdown 包含 HTML 标签，已标记待清理")
+
+        # Code block required for lab/experiment types
+        if rtype in ("case_lab",) and "```" not in md:
+            warnings.append("实验类资源应包含代码块")
+
+        # Exercise types should have answer hints
+        if rtype == "practice_pack" and "答案" not in md and "answer" not in md.lower():
+            warnings.append("练习类资源缺少答案要点")
+
+        if warnings:
+            sr["warnings"] = warnings
+            resource["safety_review"] = sr
 
     def _build_profile_core(
         self,
@@ -421,6 +739,12 @@ class LearningAgentService:
         focus_modules = profile["focus_modules"]
         module_titles = [module["title"] for module in focus_modules]
         resources = self._build_resources(course, profile, focus_modules)
+        # Decorate with display metadata + safety review + markdown quality
+        for r in resources:
+            if "safety_review" not in r:
+                r["safety_review"] = self._build_safety_review(r)
+            r["display"] = self._get_display_meta(r.get("type", ""))
+            self._validate_markdown_quality(r)
         learning_path = self._build_learning_path(profile, focus_modules)
         return {
             "package_overview": (
@@ -444,106 +768,294 @@ class LearningAgentService:
         }
 
     def _build_resources(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        outline = "\n".join(f"- {module['title']}：{'、'.join(module['core_points'][:2])}" for module in focus_modules)
+        course_id = course.get("course_id", "")
         first_module = focus_modules[0]
         second_module = focus_modules[1] if len(focus_modules) > 1 else focus_modules[0]
         last_module = focus_modules[-1]
+
+        # Try to pull KB content for the focus modules
+        kb_lectures = self._kb_module_contents(course_id, focus_modules, "lecture.md")
+        kb_exercises = self._kb_module_exercises(course_id, focus_modules)
+        kb_concepts = self._kb_module_concepts(course_id, focus_modules)
+        kb_labs = self._kb_module_contents(course_id, focus_modules, "lab.md")
+        sources = self._kb_sources(course_id)
+
         return [
-            {
-                "resource_id": "course-brief",
-                "type": "course_brief",
-                "title": f"{course['title']}主线讲解",
-                "summary": "把课程目标、核心概念和难点拆成一页讲解提纲。",
-                "estimated_minutes": 18,
-                "agent_id": "explainer",
-                "content_markdown": (
-                    f"# {course['title']}主线讲解\n\n"
-                    f"## 当前学习定位\n- 目标：{profile['dimensions'][1]['value']}\n"
-                    f"- 基础：{profile['dimensions'][0]['value']}\n"
-                    f"- 节奏：每周 {profile['weekly_days']} 天，每天 {profile['daily_minutes']} 分钟\n\n"
-                    f"## 先抓住的主线\n{outline}\n\n"
-                    f"## 第一优先模块：{first_module['title']}\n"
-                    + "\n".join(f"- {point}" for point in first_module["core_points"])
-                    + f"\n\n## 学完标志\n- {first_module['outcome']}"
-                ),
-            },
-            {
-                "resource_id": "mind-map",
-                "type": "mind_map",
-                "title": "课程脑图",
-                "summary": "把核心模块串成一个可复盘的知识结构树。",
-                "estimated_minutes": 10,
-                "agent_id": "curator",
-                "content_markdown": (
-                    f"# {course['title']}脑图\n\n- 课程目标：{profile['dimensions'][1]['value']}\n"
-                    + "\n".join(
-                        f"  - {module['title']}\n" + "\n".join(f"    - {point}" for point in module["core_points"][:2])
-                        for module in focus_modules
-                    )
-                ),
-            },
-            {
-                "resource_id": "practice-pack",
-                "type": "practice_pack",
-                "title": "分层练习包",
-                "summary": "包含热身题、标准题和迁移题，保证可练可检验。",
-                "estimated_minutes": 25,
-                "agent_id": "practice",
-                "content_markdown": (
-                    "# 分层练习包\n\n## 热身题\n"
-                    f"1. 用自己的话解释“{first_module['title']}”为什么重要。\n"
-                    f"2. 比较 {first_module['core_points'][0]} 与 {first_module['core_points'][1]} 的差别。\n\n"
-                    "## 标准题\n"
-                    f"1. 围绕 {second_module['title']} 写出一题课堂级别题目并给出步骤。\n"
-                    "2. 用 5 分钟回忆本周三个关键词，再对照讲义补漏。\n\n"
-                    "## 迁移题\n"
-                    f"1. 说明 {last_module['title']} 在项目/考试中的使用场景。\n"
-                    "2. 设计一道需要跨两个模块联动的综合题。"
-                ),
-            },
-            {
-                "resource_id": "reading-guide",
-                "type": "reading_guide",
-                "title": "精读与笔记指南",
-                "summary": "告诉学习者该怎么看教材、怎么看例题、怎么记笔记。",
-                "estimated_minutes": 12,
-                "agent_id": "curator",
-                "content_markdown": (
-                    "# 精读与笔记指南\n\n## 阅读顺序\n"
-                    + "\n".join(f"- 先读《{module['title']}》的定义、例题、结论。" for module in focus_modules[:3])
-                    + "\n\n## 笔记模板\n- 定义\n- 关键步骤\n- 易错点\n- 自己的例子\n\n"
-                    "## 复盘动作\n- 每学完一节，用 3 句话写出“它解决什么问题、怎么做、什么时候会错”。"
-                ),
-            },
-            {
-                "resource_id": "case-lab",
-                "type": "case_lab",
-                "title": "案例 / 实验任务",
-                "summary": "把课程知识迁移到一个小案例，避免只停留在概念层。",
-                "estimated_minutes": 35,
-                "agent_id": "explainer",
-                "content_markdown": (
-                    "# 案例 / 实验任务\n\n"
-                    f"## 任务主题\n将“{first_module['title']}”与“{last_module['title']}”串成一个小案例。\n\n"
-                    "## 任务步骤\n1. 先写出目标和输入输出。\n2. 画出结构或流程。\n3. 完成实现/推导。\n4. 最后反思哪里最容易卡住。\n\n"
-                    "## 提交物\n- 一页过程笔记\n- 一份答案/代码/推导结果\n- 一段 100 字复盘"
-                ),
-            },
-            {
-                "resource_id": "review-sheet",
-                "type": "review_sheet",
-                "title": "考前 / 复盘清单",
-                "summary": "用于最后回顾重点、错因和下一次复现动作。",
-                "estimated_minutes": 8,
-                "agent_id": "coach",
-                "content_markdown": (
-                    "# 复盘清单\n\n## 我已经会了什么\n"
-                    + "\n".join(f"- {module['title']}：是否能独立说出关键步骤？" for module in focus_modules[:3])
-                    + "\n\n## 我还不会什么\n- 哪个定义总是记混？\n- 哪个题型一上手就卡住？\n\n"
-                    "## 下一次学习前要做什么\n- 重看一段讲解\n- 补做一道标准题\n- 把错因写成一句提醒"
-                ),
-            },
+            self._build_course_brief(course, profile, focus_modules, kb_lectures, sources),
+            self._build_mind_map(course, profile, focus_modules, kb_concepts, sources),
+            self._build_practice_pack(course, profile, focus_modules, kb_exercises, sources),
+            self._build_reading_guide(course, profile, focus_modules, sources),
+            self._build_case_lab(course, profile, first_module, last_module, kb_labs, sources),
+            self._build_review_sheet(course, profile, focus_modules, kb_concepts, sources),
         ]
+
+    # ── KB helpers ──────────────────────────────────────
+
+    def _kb_module_contents(self, course_id: str, focus_modules: list[dict[str, Any]], filename: str) -> dict[str, str]:
+        """Return {module_id: content} for a given file across focus modules."""
+        result: dict[str, str] = {}
+        if self.kb is None or course_id not in self.kb.course_ids():
+            return result
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            content = self.kb.read_module_file(mid, filename)
+            if content:
+                result[mid] = content
+        return result
+
+    def _kb_module_concepts(self, course_id: str, focus_modules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        """Return {module_id: [concept, ...]} for focus modules."""
+        result: dict[str, list[dict[str, Any]]] = {}
+        if self.kb is None or course_id not in self.kb.course_ids():
+            return result
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            concepts = self.kb.concept_list(mid)
+            if concepts:
+                result[mid] = concepts
+        return result
+
+    def _kb_module_exercises(self, course_id: str, focus_modules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        """Return {module_id: [exercise, ...]} for focus modules."""
+        result: dict[str, list[dict[str, Any]]] = {}
+        if self.kb is None or course_id not in self.kb.course_ids():
+            return result
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            exercises = self.kb.exercise_list(mid)
+            if exercises:
+                result[mid] = exercises
+        return result
+
+    def _kb_sources(self, course_id: str) -> list[dict[str, Any]]:
+        if self.kb is None or course_id not in self.kb.course_ids():
+            return []
+        return self.kb.source_list(course_id)
+
+    def _source_refs_for(self, module_ids: list[str], used_sources: list[str] | None = None, *, is_self_authored: bool = False) -> list[str]:
+        """Build source_refs with clear semantics.
+
+        - module:xxx  → content from KnowledgeBase module files
+        - source:xxx  → external reference actually consulted (only when used)
+        - origin:self_authored → template/rule-generated content, not from KB
+        """
+        refs: list[str] = []
+        if is_self_authored:
+            refs.append("origin:self_authored")
+        else:
+            refs.extend(f"module:{mid}" for mid in module_ids[:3])
+        for sid in (used_sources or [])[:3]:
+            refs.append(f"source:{sid}")
+        return refs
+
+    # ── Resource builders ───────────────────────────────
+
+    def _build_course_brief(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], kb_lectures: dict[str, str], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        first_module = focus_modules[0]
+        # Use KB lecture content if available, otherwise template
+        lecture_content = kb_lectures.get(first_module.get("module_id", ""), "")
+        if lecture_content:
+            # Extract key sections from lecture (first ~1000 chars of core sections)
+            lines = lecture_content.split("\n")
+            body_start = 0
+            for i, line in enumerate(lines):
+                if line.startswith("## 核心讲解") or line.startswith("## 学习目标"):
+                    body_start = i
+                    break
+            excerpt = "\n".join(lines[body_start:body_start + 40]) if body_start else lecture_content[:1200]
+            content_md = (
+                f"# {course['title']} — {first_module['title']}\n\n"
+                f"> 来源：课程知识库 | 画像适配：{profile['dimensions'][1]['value']}\n\n"
+                f"{excerpt}\n\n"
+                f"---\n*本内容节选自课程知识库，已根据学习画像调整重点。*"
+            )
+        else:
+            outline = "\n".join(f"- {m['title']}：{'、'.join(m['core_points'][:2])}" for m in focus_modules)
+            content_md = (
+                f"# {course['title']}主线讲解\n\n"
+                f"## 当前学习定位\n- 目标：{profile['dimensions'][1]['value']}\n"
+                f"- 基础：{profile['dimensions'][0]['value']}\n\n"
+                f"## 先抓住的主线\n{outline}\n\n"
+                f"## 第一优先模块：{first_module['title']}\n"
+                + "\n".join(f"- {point}" for point in first_module.get("core_points", []))
+            )
+        return {
+            "resource_id": "course-brief",
+            "type": "course_brief",
+            "title": f"{course['title']}主线讲解",
+            "summary": "基于课程知识库生成，结合学习画像突出关键概念与易错点。",
+            "estimated_minutes": 18,
+            "agent_id": "explainer",
+            "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules]),
+            "content_markdown": content_md,
+        }
+
+    def _build_mind_map(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], kb_concepts: dict[str, list[dict[str, Any]]], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lines = [f"# {course['title']} 知识脑图\n", f"> 画像适配：{profile['dimensions'][1]['value']}\n"]
+        # Use KB concepts for tree structure
+        has_kb = any(kb_concepts.values())
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            concepts = kb_concepts.get(mid, [])
+            lines.append(f"## {module['title']}")
+            if concepts:
+                for c in concepts:
+                    lines.append(f"- **{c['name']}**：{c.get('definition', '')[:80]}")
+                    for mistake in c.get("common_mistakes", [])[:1]:
+                        lines.append(f"  - ⚠️ 易错：{mistake}")
+            else:
+                for point in module.get("core_points", [])[:3]:
+                    lines.append(f"- {point}")
+            lines.append("")
+        return {
+            "resource_id": "mind-map",
+            "type": "mind_map",
+            "title": "课程脑图",
+            "summary": "由知识库概念数据自动构建的知识结构树，标注易错点。" if has_kb else "基于核心模块的关键词梳理。",
+            "estimated_minutes": 10,
+            "agent_id": "curator",
+            "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules[:2]]),
+            "content_markdown": "\n".join(lines),
+        }
+
+    def _build_practice_pack(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], kb_exercises: dict[str, list[dict[str, Any]]], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lines = ["# 分层练习包\n"]
+        has_kb = any(kb_exercises.values())
+
+        if has_kb:
+            # Pull real exercises from KB, categorized by level
+            basic_qs = []
+            standard_qs = []
+            transfer_qs = []
+            for module in focus_modules:
+                mid = module.get("module_id", "")
+                for ex in kb_exercises.get(mid, []):
+                    entry = f"- [{module['title']}] {ex.get('prompt', '')[:120]}\n  - 答案要点：{ex.get('answer_outline', '')[:100]}"
+                    level = ex.get("level", "standard")
+                    if level == "basic":
+                        basic_qs.append(entry)
+                    elif level == "transfer":
+                        transfer_qs.append(entry)
+                    else:
+                        standard_qs.append(entry)
+
+            lines.append("## 热身题（基础）\n")
+            lines.extend(basic_qs[:3] or ["- 请先完成课程知识库中基础概念的复习。\n"])
+            lines.append("\n## 标准题\n")
+            lines.extend(standard_qs[:3] or ["- 围绕重点模块完成课堂级别题目。\n"])
+            lines.append("\n## 迁移题（综合）\n")
+            lines.extend(transfer_qs[:2] or ["- 尝试将两个模块的知识联动解决综合问题。\n"])
+            lines.append(f"\n> 题目来源：课程知识库，共收录 {sum(len(v) for v in kb_exercises.values())} 道练习。")
+        else:
+            first_module = focus_modules[0]
+            second_module = focus_modules[1] if len(focus_modules) > 1 else focus_modules[0]
+            last_module = focus_modules[-1]
+            lines = [
+                "# 分层练习包\n\n## 热身题\n"
+                f"1. 用自己的话解释「{first_module['title']}」为什么重要。\n"
+                f"2. 比较 {first_module['core_points'][0]} 与 {first_module['core_points'][1]} 的差别。\n\n"
+                "## 标准题\n"
+                f"1. 围绕 {second_module['title']} 写出一题课堂级别题目并给出步骤。\n"
+                "2. 用 5 分钟回忆本周三个关键词，再对照讲义补漏。\n\n"
+                "## 迁移题\n"
+                f"1. 说明 {last_module['title']} 在项目/考试中的使用场景。\n"
+                "2. 设计一道需要跨两个模块联动的综合题。"
+            ]
+
+        return {
+            "resource_id": "practice-pack",
+            "type": "practice_pack",
+            "title": "分层练习包",
+            "summary": f"从课程知识库精选 {sum(len(v) for v in kb_exercises.values())} 道练习，按基础/标准/迁移分层。" if has_kb else "包含热身题、标准题和迁移题。",
+            "estimated_minutes": 25,
+            "agent_id": "practice",
+            "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules]),
+            "content_markdown": "\n".join(lines) if isinstance(lines, list) else lines,
+        }
+
+    def _build_reading_guide(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lines = ["# 精读与笔记指南\n", "## 阅读顺序\n"]
+        for module in focus_modules[:3]:
+            lines.append(f"- 先读《{module['title']}》的定义、例题、结论。")
+        lines.append("\n## 笔记模板\n- 定义\n- 关键步骤\n- 易错点\n- 自己的例子\n")
+        lines.append("\n## 参考来源\n")
+        if sources:
+            for src in sources:
+                lines.append(f"- [{src.get('source_id', '')}] {src.get('title', '')} — {src.get('usage', '')}")
+                if src.get("url"):
+                    lines.append(f"  {src['url']}")
+        else:
+            lines.append("- 课程教材及课堂讲义\n- 在线参考：OpenDSA、Runestone Academy")
+        lines.append("\n## 复盘动作\n- 每学完一节，用 3 句话写出「它解决什么问题、怎么做、什么时候会错」。")
+        # Build source_refs: module references for structure, explicit source refs for external links
+        used_source_ids = [s.get("source_id", "") for s in sources[:3] if s.get("source_id")]
+        return {
+            "resource_id": "reading-guide",
+            "type": "reading_guide",
+            "title": "精读与笔记指南",
+            "summary": "基于课程参考来源，指导学习者高效阅读和整理笔记。",
+            "estimated_minutes": 12,
+            "agent_id": "curator",
+            "source_refs": self._source_refs_for(
+                [m.get("module_id", "") for m in focus_modules[:2]],
+                used_sources=used_source_ids,
+            ),
+            "content_markdown": "\n".join(lines),
+        }
+
+    def _build_case_lab(self, course: dict[str, Any], profile: dict[str, Any], first_module: dict[str, Any], last_module: dict[str, Any], kb_labs: dict[str, str], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lab_content = kb_labs.get(first_module.get("module_id", ""), "")
+        has_kb = bool(lab_content)
+        if lab_content:
+            excerpt = lab_content[:1000]
+            content_md = (
+                f"# 实验任务：{first_module['title']}\n\n"
+                f"> 来源：课程知识库实验文件\n\n{excerpt}"
+            )
+        else:
+            content_md = (
+                f"# 案例 / 实验任务\n\n"
+                f"## 任务主题\n将「{first_module['title']}」与「{last_module['title']}」串成一个小案例。\n\n"
+                "## 任务步骤\n1. 先写出目标和输入输出。\n2. 画出结构或流程。\n3. 完成实现/推导。\n4. 最后反思哪里最容易卡住。\n\n"
+                "## 提交物\n- 一页过程笔记\n- 一份答案/代码/推导结果\n- 一段 100 字复盘"
+            )
+        return {
+            "resource_id": "case-lab",
+            "type": "case_lab",
+            "title": "案例 / 实验任务",
+            "summary": "从课程知识库提取实验任务，将知识迁移到实际操作。" if has_kb else "把课程知识迁移到小案例中。",
+            "estimated_minutes": 35,
+            "agent_id": "explainer",
+            "source_refs": self._source_refs_for([first_module.get("module_id", "")]),
+            "content_markdown": content_md,
+        }
+
+    def _build_review_sheet(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], kb_concepts: dict[str, list[dict[str, Any]]], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lines = ["# 复盘清单\n", "## 我已经会了什么\n"]
+        for module in focus_modules[:3]:
+            lines.append(f"- {module['title']}：是否能独立说出关键步骤？")
+        lines.append("\n## 常见易错点（来自知识库）\n")
+        has_mistakes = False
+        for module in focus_modules[:3]:
+            mid = module.get("module_id", "")
+            concepts = kb_concepts.get(mid, [])
+            for c in concepts:
+                for mistake in c.get("common_mistakes", []):
+                    lines.append(f"- [{c['name']}] {mistake}")
+                    has_mistakes = True
+        if not has_mistakes:
+            lines.append("- 哪个定义总是记混？\n- 哪个题型一上手就卡住？")
+        lines.append("\n## 下一次学习前要做什么\n- 重看一段讲解\n- 补做一道标准题\n- 把错因写成一句提醒")
+        return {
+            "resource_id": "review-sheet",
+            "type": "review_sheet",
+            "title": "考前 / 复盘清单",
+            "summary": "结合知识库中记录的常见错误，帮助定位薄弱环节。" if has_mistakes else "用于最后回顾重点和错因。",
+            "estimated_minutes": 8,
+            "agent_id": "coach",
+            "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules[:2]]),
+            "content_markdown": "\n".join(lines),
+        }
 
     def _build_learning_path(self, profile: dict[str, Any], focus_modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         weekly_days = int(profile["weekly_days"])
@@ -672,7 +1184,7 @@ class LearningAgentService:
 
     def _build_model_prompt(self, course: dict[str, Any], profile: dict[str, Any], package: dict[str, Any]) -> str:
         payload = {
-            "course": self._serialize_course_summary(course),
+            "course": course,
             "profile_overview": profile["overview"],
             "dimensions": profile["dimensions"],
             "focus_modules": profile["focus_modules"],
@@ -786,3 +1298,47 @@ class LearningAgentService:
     @staticmethod
     def _utc_now_iso() -> str:
         return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+# ── Fallback courses (for courses not yet in KnowledgeBase) ──
+
+_FALLBACK_PYTHON_COURSE: dict[str, Any] = {
+    "course_id": "python_programming",
+    "title": "Python 程序设计",
+    "category": "编程基础",
+    "difficulty": "入门到进阶",
+    "summary": "覆盖语法、函数、数据结构、文件处理、面向对象与小项目实践。",
+    "tags": ["编程", "自动化", "项目"],
+    "module_count": 6,
+    "modules": [
+        {"module_id": "py-01", "title": "基础语法", "core_points": ["变量", "数据类型", "输入输出"], "outcome": "能写简单脚本。"},
+        {"module_id": "py-02", "title": "流程与函数", "core_points": ["分支", "循环", "函数"], "outcome": "能封装重复逻辑。"},
+        {"module_id": "py-03", "title": "列表字典集合", "core_points": ["序列", "映射", "推导式"], "outcome": "能组织中等规模数据。"},
+        {"module_id": "py-04", "title": "文件与异常", "core_points": ["文件读写", "JSON", "异常处理"], "outcome": "能完成稳定的数据读写。"},
+        {"module_id": "py-05", "title": "面向对象", "core_points": ["类", "继承", "组合"], "outcome": "能做基础对象建模。"},
+        {"module_id": "py-06", "title": "项目实战", "core_points": ["模块化", "调试", "脚本实战"], "outcome": "能完成小型项目。"},
+    ],
+}
+
+_FALLBACK_ADVANCED_MATH_COURSE: dict[str, Any] = {
+    "course_id": "advanced_math",
+    "title": "高等数学",
+    "category": "数学基础课",
+    "difficulty": "基础到强化",
+    "summary": "覆盖极限、导数、积分、多元微积分与级数，适合期末与考研复盘。",
+    "tags": ["数学", "考研", "理论"],
+    "module_count": 6,
+    "modules": [
+        {"module_id": "am-01", "title": "极限与连续", "core_points": ["函数", "极限", "连续"], "outcome": "能判断连续与极限行为。"},
+        {"module_id": "am-02", "title": "导数与微分", "core_points": ["导数定义", "求导法则", "微分"], "outcome": "能完成一元求导。"},
+        {"module_id": "am-03", "title": "导数应用", "core_points": ["单调性", "极值", "中值定理"], "outcome": "能分析函数图像。"},
+        {"module_id": "am-04", "title": "积分基础", "core_points": ["换元", "分部积分", "定积分"], "outcome": "能处理核心积分题。"},
+        {"module_id": "am-05", "title": "多元微积分", "core_points": ["偏导", "全微分", "极值"], "outcome": "能分析二元函数。"},
+        {"module_id": "am-06", "title": "级数与综合复盘", "core_points": ["收敛性", "幂级数", "综合题"], "outcome": "能完成综合复盘。"},
+    ],
+}
+
+_FALLBACK_COURSE_MAP: dict[str, dict[str, Any]] = {
+    "python_programming": _FALLBACK_PYTHON_COURSE,
+    "advanced_math": _FALLBACK_ADVANCED_MATH_COURSE,
+}

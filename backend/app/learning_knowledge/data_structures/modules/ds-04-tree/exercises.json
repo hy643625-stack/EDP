@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-04-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "画出以下数据依次插入得到的二叉搜索树：15, 8, 20, 6, 12, 18, 25。然后写出其中序遍历序列。",
+    "answer_outline": "树结构：15 为根，左子 8 右子 20；8 左右子 6、12；20 左右子 18、25。中序：6, 8, 12, 15, 18, 20, 25（升序）。",
+    "target_concepts": ["ds-04-c01", "ds-04-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-04-e02",
+    "level": "basic",
+    "type": "code_writing",
+    "prompt": "用递归实现二叉树的前序、中序和后序遍历函数。三个函数各不超过 5 行。",
+    "answer_outline": "三个函数的区别仅在于访问根节点的顺序。前序：visit → left → right。中序：left → visit → right。后序：left → right → visit。",
+    "target_concepts": ["ds-04-c02"],
+    "source_refs": ["runestone"]
+  },
+  {
+    "exercise_id": "ds-04-e03",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "以下代码尝试判断一棵二叉树是否为 BST。请指出 bug：\n```python\ndef is_bst(root):\n    if not root:\n        return True\n    if root.left and root.left.val > root.val:\n        return False\n    if root.right and root.right.val < root.val:\n        return False\n    return is_bst(root.left) and is_bst(root.right)\n```",
+    "answer_outline": "Bug：只比较了当前节点与直接子节点，但 BST 要求左子树 ALL 节点 < 根 < 右子树 ALL 节点。反例：根 10，左子 5，左子的右子 15。代码会错误地返回 True。修复需传递上下界。",
+    "target_concepts": ["ds-04-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-04-e04",
+    "level": "standard",
+    "type": "short_answer",
+    "prompt": "在数组中存储完全二叉树时，对于下标 i 的节点（从 0 开始），其父节点、左子、右子的下标分别是什么？",
+    "answer_outline": "父节点：(i-1)//2，左子：2i+1，右子：2i+2。堆的数组实现基于此关系。",
+    "target_concepts": ["ds-04-c04"],
+    "source_refs": ["clrs"]
+  },
+  {
+    "exercise_id": "ds-04-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "实现堆排序：将无序数组就地转换为大顶堆，然后反复弹出堆顶完成排序。要求 O(n log n) 时间、O(1) 额外空间。",
+    "answer_outline": "建堆：从最后一个非叶节点开始向下调整（heapify）。排序：将堆顶（最大值）与末尾交换，缩小堆范围，然后对堆顶做 heapify 恢复堆序。",
+    "target_concepts": ["ds-04-c04"],
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "exercise_id": "ds-04-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "给定字符频率 a:5, b:9, c:12, d:13, e:16, f:45，构造哈夫曼树并计算 WPL（带权路径长度）。",
+    "answer_outline": "哈夫曼树构造顺序：合并 5+9→14，合并 12+13→25，合并 14+16→30，合并 25+30→55，合并 45+55→100。WPL = 5×4 + 9×4 + 12×3 + 13×3 + 16×3 + 45×1 = 224。",
+    "target_concepts": ["ds-04-c05"],
+    "source_refs": []
+  }
+]

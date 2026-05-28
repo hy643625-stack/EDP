@@ -1,0 +1,56 @@
+[
+  {
+    "exercise_id": "ds-07-e01",
+    "level": "basic",
+    "type": "short_answer",
+    "prompt": "什么是排序算法的稳定性？冒泡、插入、选择、归并、快排、堆排中哪些是稳定的？",
+    "answer_outline": "稳定性：相等元素的相对顺序在排序前后保持不变。稳定：冒泡、插入、归并（合并时左侧优先）。不稳定：选择（交换可能破坏顺序）、快排（划分过程中元素可能跳跃）、堆排（堆结构调整破坏顺序）。",
+    "target_concepts": ["ds-07-c01", "ds-07-c02", "ds-07-c03", "ds-07-c04", "ds-07-c05"],
+    "source_refs": ["clrs"]
+  },
+  {
+    "exercise_id": "ds-07-e02",
+    "level": "basic",
+    "type": "code_writing",
+    "prompt": "实现插入排序，并测试在以下数组上的各轮过程：[5, 2, 4, 6, 1, 3]。",
+    "answer_outline": "遍历 i=1 到 n-1，将 arr[i] 插入 arr[0..i-1] 的正确位置。每轮输出中间结果。最终 [1,2,3,4,5,6]。",
+    "target_concepts": ["ds-07-c02"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-07-e03",
+    "level": "standard",
+    "type": "short_answer",
+    "prompt": "快速排序在最坏情况下复杂度 O(n²)。请描述导致最坏情况的场景，以及三种避免策略。",
+    "answer_outline": "最坏场景：每次 pivot 都是最小/最大元素（如已有序数组选首个元素为 pivot）。避免策略：① 随机化 pivot；② 三数取中法（首、尾、中取中值）；③ 与小数组插入排序混合（introsort 策略）。",
+    "target_concepts": ["ds-07-c04", "ds-07-c05"],
+    "source_refs": ["clrs"]
+  },
+  {
+    "exercise_id": "ds-07-e04",
+    "level": "standard",
+    "type": "code_reading",
+    "prompt": "以下归并排序实现有一个严重 bug，请找出并修复：\n```python\ndef merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)\n```\n已知 merge 函数正确。这段代码的问题是什么？",
+    "answer_outline": "这段代码本身是正确的递归归并排序实现（每次创建新的子数组副本）。但空间开销很大——每次递归都创建新数组，总空间 O(n log n) 而非 O(n)。标准的原地归并排序或使用辅助数组的版本只需 O(n) 辅助空间。",
+    "target_concepts": ["ds-07-c03"],
+    "source_refs": []
+  },
+  {
+    "exercise_id": "ds-07-e05",
+    "level": "transfer",
+    "type": "code_writing",
+    "prompt": "实现快速排序的 partition 函数（Lomuto 或 Hoare 方案），并写出测试：验证在包含大量重复元素的数组上不会退化。",
+    "answer_outline": "使用三路划分（Dutch National Flag）：将数组分为 < pivot、== pivot、> pivot 三部分。这样在大量重复元素时仍能保证 O(n log n)。",
+    "target_concepts": ["ds-07-c04"],
+    "source_refs": ["the-algorithms-python"]
+  },
+  {
+    "exercise_id": "ds-07-e06",
+    "level": "transfer",
+    "type": "short_answer",
+    "prompt": "你需要对一个 10TB 大小的日志文件按时间戳排序，但内存只有 16GB。请设计排序方案，分析关键步骤的复杂度。",
+    "answer_outline": "使用外部排序：① 将文件读入内存的 chunk（如 8GB），用高效算法（如 Timsort）排序后写回磁盘，生成 M 个有序 chunk；② 使用 K 路归并（K ≤ 可用内存缓冲区数），用最小堆从每个 chunk 读最小值合并输出。总 I/O 约 2N（读 + 写各 N）。",
+    "target_concepts": ["ds-07-c03", "ds-07-c05"],
+    "source_refs": ["clrs"]
+  }
+]
