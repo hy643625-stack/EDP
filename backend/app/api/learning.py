@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends
 
 from app.dependencies import get_learning_agent_service
 from app.response import success
-from app.schemas import LearningProfileRequest, LearningResourcePackageRequest
+from app.schemas import (
+    CreateLearningSessionRequest,
+    LearningProfileRequest,
+    LearningResourcePackageRequest,
+    UpdateLearningSessionProfileRequest,
+)
 from app.services.learning_agent_service import LearningAgentService
 
 router = APIRouter(prefix="/v1/learning", tags=["learning"])
@@ -45,3 +50,60 @@ def generate_learning_resource_package(
             daily_minutes=payload.daily_minutes,
         )
     )
+
+
+# ── Phase 2: Session-based endpoints ─────────────────
+
+@router.get("/sessions")
+def list_learning_sessions(service: LearningAgentService = Depends(get_learning_agent_service)):
+    return success(service.list_sessions())
+
+
+@router.post("/sessions")
+def create_learning_session(
+    payload: CreateLearningSessionRequest,
+    service: LearningAgentService = Depends(get_learning_agent_service),
+):
+    return success(
+        service.create_learning_session(
+            course_id=payload.course_id,
+            conversation=payload.conversation,
+            preferred_goal=payload.preferred_goal,
+            weekly_days=payload.weekly_days,
+            daily_minutes=payload.daily_minutes,
+            title=payload.title or "",
+        )
+    )
+
+
+@router.get("/sessions/{session_id}")
+def get_learning_session(
+    session_id: str,
+    service: LearningAgentService = Depends(get_learning_agent_service),
+):
+    return success(service.get_session_detail(session_id))
+
+
+@router.post("/sessions/{session_id}/profile")
+def update_learning_session_profile(
+    session_id: str,
+    payload: UpdateLearningSessionProfileRequest,
+    service: LearningAgentService = Depends(get_learning_agent_service),
+):
+    return success(
+        service.update_session_profile(
+            session_id=session_id,
+            conversation=payload.conversation,
+            preferred_goal=payload.preferred_goal,
+            weekly_days=payload.weekly_days,
+            daily_minutes=payload.daily_minutes,
+        )
+    )
+
+
+@router.post("/sessions/{session_id}/resource-package")
+def generate_session_resource_package(
+    session_id: str,
+    service: LearningAgentService = Depends(get_learning_agent_service),
+):
+    return success(service.generate_session_package(session_id))
