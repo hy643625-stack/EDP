@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BookOpen, Brain, ClipboardList, Code2, FileText, Map } from 'lucide-react'
+import { BookOpen, Brain, ClipboardList, Code2, FileText, Map, Presentation } from 'lucide-react'
 import type { LearningSafetyReview } from '@/api/types'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
@@ -77,6 +77,14 @@ const TYPE_STYLES: Record<string, {
     bg: 'bg-teal-50/60',
     border: 'border-teal-200',
     badge: 'bg-teal-100 text-teal-700 border-teal-200',
+  },
+  slide_outline: {
+    icon: <Presentation className="h-4 w-4" />,
+    label: 'PPT 大纲',
+    accent: 'text-indigo-600',
+    bg: 'bg-indigo-50/60',
+    border: 'border-indigo-200',
+    badge: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   },
 }
 

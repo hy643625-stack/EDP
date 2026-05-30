@@ -17,6 +17,7 @@ import type {
   LearningSessionCreateResponse,
   LearningSessionDetail,
   LearningSessionSummary,
+  LearningTutorResponse,
   LearningWorkbenchPayload,
   SettlementReport,
   Task,
@@ -35,7 +36,7 @@ function isDesktopRuntime(hostname: string, port: string): boolean {
   const hasPywebviewUa = ua.includes('pywebview')
   const hasPywebviewBridge = typeof (window as Window & { pywebview?: unknown }).pywebview !== 'undefined'
   // In packaged app we serve UI from embedded backend (non-vite dev port).
-  const servedByEmbeddedBackend = port !== '' && port !== '5173'
+  const servedByEmbeddedBackend = !import.meta.env.DEV && port !== '' && port !== '5173'
   return hasPywebviewUa || hasPywebviewBridge || (isLoopbackHost(hostname) && servedByEmbeddedBackend)
 }
 
@@ -332,4 +333,8 @@ export const api = {
   }) => unwrap<LearningProfilePayload>(() => http.post(`/v1/learning/sessions/${sessionId}/profile`, payload)),
   generateSessionResourcePackage: (sessionId: string) =>
     unwrap<LearningResourcePackagePayload>(() => http.post(`/v1/learning/sessions/${sessionId}/resource-package`)),
+
+  // Phase 3: Tutor
+  tutorLearningSession: (sessionId: string, question: string) =>
+    unwrap<LearningTutorResponse>(() => http.post(`/v1/learning/sessions/${sessionId}/tutor`, { question })),
 }

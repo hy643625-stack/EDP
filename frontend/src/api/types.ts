@@ -351,6 +351,10 @@ export interface LearningResourceCard {
   content_markdown: string
   source_refs?: string[]
   safety_review?: LearningSafetyReview
+  interaction?: {
+    kind: 'practice_pack' | 'case_lab' | 'review_sheet'
+    items: unknown[]
+  }
 }
 
 export interface LearningPathStage {
@@ -361,6 +365,9 @@ export interface LearningPathStage {
   deliverables: string[]
   study_plan: string
   coach_tip: string
+  recommended_resource_ids?: string[]
+  estimated_days?: number
+  priority_reason?: string
 }
 
 export interface LearningAgentRun {
@@ -395,6 +402,11 @@ export interface LearningResourcePackage {
   source_digest: {
     conversation_excerpt: string
     focus_module_titles: string[]
+  }
+  recommendations?: {
+    today_resources: string[]
+    next_action: string
+    risk_adjustments: string[]
   }
 }
 
@@ -478,4 +490,18 @@ export interface LearningSessionCreateResponse {
   runtime_message: string
   fallback_reason: string | null
   generated_at: string
+}
+
+// ── Phase 3: Tutor ─────────────────────────────────────
+
+export interface LearningTutorResponse {
+  answer_markdown: string
+  related_resources: Array<{
+    resource_id: string
+    title: string
+    summary: string
+    type: string
+  }>
+  source_refs: string[]
+  confidence: number
 }

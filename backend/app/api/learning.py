@@ -8,6 +8,7 @@ from app.schemas import (
     CreateLearningSessionRequest,
     LearningProfileRequest,
     LearningResourcePackageRequest,
+    LearningTutorRequest,
     UpdateLearningSessionProfileRequest,
 )
 from app.services.learning_agent_service import LearningAgentService
@@ -107,3 +108,14 @@ def generate_session_resource_package(
     service: LearningAgentService = Depends(get_learning_agent_service),
 ):
     return success(service.generate_session_package(session_id))
+
+
+# ── Phase 3: Tutor ───────────────────────────────────
+
+@router.post("/sessions/{session_id}/tutor")
+def tutor_learning_session(
+    session_id: str,
+    payload: LearningTutorRequest,
+    service: LearningAgentService = Depends(get_learning_agent_service),
+):
+    return success(service.tutor_session(session_id, payload.question))

@@ -37,6 +37,7 @@ jobs:
       - name: Run backend tests
         shell: pwsh
         run: |
+          $env:PYTHONPATH = "backend"
           python -m pytest backend/tests -q
 
       - name: Install frontend dependencies

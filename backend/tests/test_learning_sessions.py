@@ -102,6 +102,45 @@ class TestAgentPipeline:
         assert detail.get("latest_package") is not None
 
 
+class TestPhase3Tutor:
+    def test_tutor_chinese_concept_hit(self, service: LearningAgentService) -> None:
+        """Tutor must return related resources for Chinese concept queries."""
+        r = service.create_learning_session(
+            "data_structures", "复习数据结构准备考试，基础一般，每天学习1小时", "期末提分"
+        )
+        sid = r["session"]["id"]
+        service.generate_session_package(sid)
+
+        # Query with a known concept from the knowledge base
+        result = service.tutor_session(sid, "时间复杂度怎么学")
+        assert result["confidence"] > 0.2, \
+            f"Expected confidence > 0.2 for concept query, got {result['confidence']}"
+        assert len(result["related_resources"]) >= 1, \
+            f"Expected >= 1 related resource for concept query, got {len(result['related_resources'])}"
+
+    def test_tutor_irrelevant_query_low_confidence(self, service: LearningAgentService) -> None:
+        """Tutor should return low confidence for irrelevant queries."""
+        r = service.create_learning_session(
+            "data_structures", "复习数据结构准备考试", "期末提分"
+        )
+        sid = r["session"]["id"]
+        service.generate_session_package(sid)
+
+        result = service.tutor_session(sid, "完全没有关系的中文topic")
+        assert len(result["related_resources"]) == 0
+
+    def test_tutor_empty_package_returns_graceful(self, service: LearningAgentService) -> None:
+        """Tutor on session with no package returns graceful message."""
+        r = service.create_learning_session(
+            "data_structures", "只创建会话但不生成资源包测试", "测试"
+        )
+        sid = r["session"]["id"]
+        # Do NOT generate package
+        result = service.tutor_session(sid, "时间复杂度")
+        assert result["confidence"] == 0.0
+        assert "尚未生成资源包" in result["answer_markdown"]
+
+
 class TestBackwardCompat:
     def test_old_profile_endpoint_still_works(self, service: LearningAgentService) -> None:
         result = service.build_profile("data_structures", "准备考试中，基础一般需要系统复习")
@@ -112,3 +151,59 @@ class TestBackwardCompat:
         result = service.generate_learning_package("data_structures", "准备考试中，需要系统复习数据结构")
         assert "package" in result
         assert result["package"]["resource_count"] >= 1
+
+
+class TestPhase5Interaction:
+    def test_practice_pack_has_interaction_items(self, service: LearningAgentService) -> None:
+        r = service.create_learning_session("data_structures", "测试练习交互数据结构", "测试")
+        sid = r["session"]["id"]
+        pkg = service.generate_session_package(sid)
+        practice = next((res for res in pkg["package"]["resources"] if res["type"] == "practice_pack"), None)
+        assert practice is not None, "practice_pack resource not found"
+        interaction = practice.get("interaction")
+        assert interaction is not None, "practice_pack missing interaction field"
+        assert interaction["kind"] == "practice_pack"
+        items = interaction.get("items", [])
+        assert len(items) >= 12, f"Expected >= 12 exercise items, got {len(items)}"
+        for item in items:
+            assert item.get("hint"), f"Item {item.get('exercise_id')} missing hint"
+            assert item.get("answer_outline"), f"Item {item.get('exercise_id')} missing answer_outline"
+            assert item.get("feedback"), f"Item {item.get('exercise_id')} missing feedback"
+
+    def test_case_lab_has_interactive_steps(self, service: LearningAgentService) -> None:
+        r = service.create_learning_session("data_structures", "测试实验交互数据结构", "测试")
+        sid = r["session"]["id"]
+        pkg = service.generate_session_package(sid)
+        lab = next((res for res in pkg["package"]["resources"] if res["type"] == "case_lab"), None)
+        assert lab is not None, "case_lab resource not found"
+        interaction = lab.get("interaction")
+        assert interaction is not None, "case_lab missing interaction field"
+        assert interaction["kind"] == "case_lab"
+        items = interaction.get("items", [])
+        assert len(items) >= 1
+        data = items[0]
+        assert len(data.get("steps", [])) >= 2, "Expected >= 2 steps"
+        assert len(data.get("deliverables", [])) >= 2, "Expected >= 2 deliverables"
+        assert len(data.get("reflections", [])) >= 1, "Expected >= 1 reflection"
+
+    def test_review_sheet_has_checklist_items(self, service: LearningAgentService) -> None:
+        r = service.create_learning_session("data_structures", "测试复盘交互数据结构", "测试")
+        sid = r["session"]["id"]
+        pkg = service.generate_session_package(sid)
+        review = next((res for res in pkg["package"]["resources"] if res["type"] == "review_sheet"), None)
+        assert review is not None, "review_sheet resource not found"
+        interaction = review.get("interaction")
+        assert interaction is not None, "review_sheet missing interaction field"
+        assert interaction["kind"] == "review_sheet"
+        items = interaction.get("items", [])
+        assert len(items) >= 1
+        for item in items:
+            assert "description" in item
+            assert "mastered" in item
+
+    def test_old_resource_package_still_has_content_markdown(self, service: LearningAgentService) -> None:
+        r = service.create_learning_session("data_structures", "测试Markdown保留数据结构", "测试")
+        sid = r["session"]["id"]
+        pkg = service.generate_session_package(sid)
+        for resource in pkg["package"]["resources"]:
+            assert resource.get("content_markdown"), f"{resource['resource_id']} missing content_markdown"

@@ -65,6 +65,21 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+def _extract_core_name(name: str) -> str:
+    """Extract the Chinese-only core from a concept name like '栈（Stack）' -> '栈'."""
+    core = "".join(ch for ch in name if "一" <= ch <= "鿿" or "　" <= ch <= "〿")
+    return core if core else name
+
+
+def _has_word_overlap(question: str, concept_name: str) -> bool:
+    """Check if any 2-char slice of the concept name appears in the question."""
+    for i in range(len(concept_name) - 1):
+        chunk = concept_name[i:i+2]
+        if len(chunk) >= 2 and chunk in question:
+            return True
+    return False
+
+
 class LearningAgentService:
     def __init__(
         self,
@@ -354,6 +369,118 @@ class LearningAgentService:
             raise ApiError("NOT_FOUND", f"会话不存在：{session_id}", 404)
         return session
 
+    # ── Phase 3: Tutor ─────────────────────────────────
+
+    def tutor_session(self, session_id: str, question: str) -> dict[str, Any]:
+        """Instant Q&A based on session's latest resource package.
+
+        Uses concept→module knowledge graph: first resolves which KB concepts
+        appear in the question, then matches resources by module references.
+        """
+        session = self._require_session(session_id)
+        if self.repo is None:
+            raise ApiError("BAD_REQUEST", "会话功能不可用", 400)
+        latest_raw = self.repo.get_latest_package(session_id)
+        if latest_raw is None:
+            return {
+                "answer_markdown": "尚未生成资源包，请先生成资源包后再提问。",
+                "related_resources": [],
+                "source_refs": [],
+                "confidence": 0.0,
+            }
+        package = latest_raw.get("package", {})
+        resources = package.get("resources", [])
+        if not resources:
+            resources = package.get("package", {}).get("resources", [])
+
+        # Phase 1: Resolve question → KB concepts → modules
+        matched_module_ids: set[str] = set()
+        matched_concept_names: list[str] = []
+        if self.kb is not None:
+            for mid in self.kb.module_ids():
+                for c in self.kb.concept_list(mid):
+                    cname = c.get("name", "")
+                    # Match full name or Chinese-only core (strip parentheticals)
+                    core_name = _extract_core_name(cname)
+                    if (len(cname) >= 2 and cname in question) or \
+                       (len(core_name) >= 1 and core_name in question) or \
+                       (len(question) >= 2 and question in cname) or \
+                       (len(core_name) >= 2 and _has_word_overlap(question, core_name)):
+                        matched_module_ids.add(mid)
+                        matched_concept_names.append(cname)
+                        break  # one match per module is enough
+            # Also match module titles directly in question
+            for mid in self.kb.module_ids():
+                module = self.kb.get_module(mid)
+                if module and len(module.title) >= 2 and module.title in question:
+                    matched_module_ids.add(mid)
+
+        # Phase 2: Score resources by module reference + content overlap
+        matches: list[tuple[int, dict[str, Any]]] = []
+        for r in resources:
+            score = 0
+            refs = r.get("source_refs", [])
+
+            # Module-level match: resource source_refs reference the concept's module
+            for mid in matched_module_ids:
+                if any(mid in ref for ref in refs):
+                    score += 10
+
+            # Concept name directly in resource content
+            content = r.get("content_markdown", "")
+            for cname in matched_concept_names:
+                if cname in content:
+                    score += 5
+
+            # Title/summary match
+            title = r.get("title", "")
+            summary = r.get("summary", "")
+            combined = title + " " + summary
+            if question in combined:
+                score += 5
+            for cname in matched_concept_names:
+                if cname in combined:
+                    score += 3
+
+            if score > 0:
+                matches.append((score, r))
+        matches.sort(key=lambda x: x[0], reverse=True)
+
+        related: list[dict[str, str]] = []
+        for score, r in matches[:3]:
+            if score < 3:
+                continue
+            related.append({
+                "resource_id": r.get("resource_id", ""),
+                "title": r.get("title", ""),
+                "summary": r.get("summary", ""),
+                "type": r.get("type", ""),
+            })
+
+        if related:
+            answer = (
+                f"根据你当前的学习资源包，以下内容可能与你的问题相关：\n\n"
+                + "\n".join(f"- **{item['title']}**：{item['summary']}" for item in related)
+                + f"\n\n建议从以上资源中查找答案。如需更深入的解答，可以在追加学习描述后重新生成资源包。"
+            )
+            confidence = min(0.3 + len(related) * 0.2, 0.9)
+            source_refs = [f"resource:{item['resource_id']}" for item in related]
+        else:
+            answer = (
+                "当前资源包中未找到与问题直接关联的内容。基于课程知识库的保守回答：\n\n"
+                "建议从「主线讲解」和「知识脑图」入手，先掌握核心概念的定义和基本操作，"
+                "再通过「分层练习」巩固理解。如果问题涉及特定知识点，可以在追加学习描述时明确提及。"
+            )
+            confidence = 0.2
+            source_refs = ["origin:self_authored"]
+
+        return {
+            "answer_markdown": answer,
+            "related_resources": related,
+            "source_refs": source_refs,
+            "confidence": round(confidence, 2),
+        }
+
     # ═══════════════════════════════════════════════════════
     # Agent pipeline + runner + safety
     # ═══════════════════════════════════════════════════════
@@ -457,9 +584,20 @@ class LearningAgentService:
             run["output_summary"] = review.get("summary", "")[:200]
             agent_runs.append(dict(run))
 
+        # Agent 7: Curator extra — slide outline
+        with self._agent_run(session_id, "curator-slide", f"PPT大纲: {', '.join(module_titles[:3])}") as run:
+            slide = self._build_slide_outline(course, profile, focus_modules, self._kb_sources(course_id))
+            run["output_summary"] = slide.get("summary", "")[:200]
+            run["source_refs"] = slide.get("source_refs", [])
+            agent_runs.append(dict(run))
+
+        # Build recommendations
+        all_resources = [resource, mind_map, practice, reading_guide, case_lab, slide, review]
+        recommendations = self._build_recommendations(profile, all_resources)
+        learning_path = self._build_enhanced_learning_path(profile, focus_modules, all_resources)
+
         # Assemble package with safety reviews
-        resources = [resource, mind_map, practice, reading_guide, case_lab, review]
-        for r in resources:
+        for r in all_resources:
             if "safety_review" not in r:
                 r["safety_review"] = self._build_safety_review(r)
             r["display"] = self._get_display_meta(r.get("type", ""))
@@ -474,11 +612,12 @@ class LearningAgentService:
                 f"先按「{profile['dimensions'][0]['value']} + {profile['dimensions'][3]['value']}」的组合推进。"
                 "如果连续两次出现任务积压，就先缩小当天目标。"
             ),
-            "resource_count": 6,
-            "resources": resources,
+            "resource_count": len(all_resources),
+            "resources": all_resources,
             "learning_path": learning_path,
             "agent_runs": agent_runs,
             "evaluation": self._build_evaluation_panel(course, focus_modules),
+            "recommendations": recommendations,
             "source_digest": {
                 "conversation_excerpt": conversation[:180],
                 "focus_module_titles": module_titles,
@@ -509,6 +648,7 @@ class LearningAgentService:
         "reading_guide": {"icon": "file-text",     "accent": "amber",   "layout": "resource-list",  "density": "comfortable"},
         "case_lab":      {"icon": "code-2",        "accent": "rose",    "layout": "lab-manual",     "density": "comfortable"},
         "review_sheet":  {"icon": "clipboard-list","accent": "teal",    "layout": "checklist",      "density": "compact"},
+        "slide_outline": {"icon": "presentation",  "accent": "indigo",  "layout": "slide-deck",     "density": "compact"},
     }
 
     @classmethod
@@ -749,7 +889,17 @@ class LearningAgentService:
                 r["safety_review"] = self._build_safety_review(r)
             r["display"] = self._get_display_meta(r.get("type", ""))
             self._validate_markdown_quality(r)
-        learning_path = self._build_learning_path(profile, focus_modules)
+        # Phase 3: add slide_outline
+        resources.append(self._build_slide_outline(course, profile, focus_modules, self._kb_sources(course.get("course_id", ""))))
+        # Decorate last resource too
+        last_r = resources[-1]
+        if "safety_review" not in last_r:
+            last_r["safety_review"] = self._build_safety_review(last_r)
+        last_r["display"] = self._get_display_meta(last_r.get("type", ""))
+        self._validate_markdown_quality(last_r)
+
+        learning_path = self._build_enhanced_learning_path(profile, focus_modules, resources)
+        recommendations = self._build_recommendations(profile, resources)
         return {
             "package_overview": (
                 f"本次资源包围绕《{course['title']}》的 {len(focus_modules)} 个核心模块展开，"
@@ -765,6 +915,7 @@ class LearningAgentService:
             "learning_path": learning_path,
             "agent_runs": self._build_agent_runs(profile, learning_path),
             "evaluation": self._build_evaluation_panel(course, focus_modules),
+            "recommendations": recommendations,
             "source_digest": {
                 "conversation_excerpt": conversation[:180],
                 "focus_module_titles": module_titles,
@@ -966,15 +1117,19 @@ class LearningAgentService:
                 "2. 设计一道需要跨两个模块联动的综合题。"
             ]
 
+        # Build interaction data (Phase 5)
+        interaction = self._build_practice_interaction(focus_modules, kb_exercises) if has_kb else None
+
         return {
             "resource_id": "practice-pack",
             "type": "practice_pack",
             "title": "分层练习包",
-            "summary": f"从课程知识库精选 {sum(len(v) for v in kb_exercises.values())} 道练习，按基础/标准/迁移分层。" if has_kb else "包含热身题、标准题和迁移题。",
+            "summary": f"从课程知识库精选 {len(interaction['items']) if interaction else 0} 道练习，按基础/标准/迁移分层。" if has_kb else "包含热身题、标准题和迁移题。",
             "estimated_minutes": 25,
             "agent_id": "practice",
             "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules]),
             "content_markdown": "\n".join(lines) if isinstance(lines, list) else lines,
+            **({"interaction": interaction} if interaction else {}),
         }
 
     def _build_reading_guide(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], sources: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1032,6 +1187,7 @@ class LearningAgentService:
             "agent_id": "explainer",
             "source_refs": self._source_refs_for([first_module.get("module_id", "")]),
             "content_markdown": content_md,
+            "interaction": self._build_lab_interaction(first_module, kb_labs),
         }
 
     def _build_review_sheet(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], kb_concepts: dict[str, list[dict[str, Any]]], sources: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1050,6 +1206,9 @@ class LearningAgentService:
         if not has_mistakes:
             lines.append("- 哪个定义总是记混？\n- 哪个题型一上手就卡住？")
         lines.append("\n## 下一次学习前要做什么\n- 重看一段讲解\n- 补做一道标准题\n- 把错因写成一句提醒")
+        # Build interaction data (Phase 5)
+        interaction = self._build_review_interaction(focus_modules, kb_concepts) if has_mistakes else None
+
         return {
             "resource_id": "review-sheet",
             "type": "review_sheet",
@@ -1059,7 +1218,174 @@ class LearningAgentService:
             "agent_id": "coach",
             "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules[:2]]),
             "content_markdown": "\n".join(lines),
+            **({"interaction": interaction} if interaction else {}),
         }
+
+    # ── Phase 3: Slide outline ─────────────────────────
+
+    def _build_slide_outline(self, course: dict[str, Any], profile: dict[str, Any], focus_modules: list[dict[str, Any]], sources: list[dict[str, Any]]) -> dict[str, Any]:
+        lines = [f"# {course['title']} 教学 PPT 大纲\n"]
+        lines.append(f"> 画像适配：{profile['dimensions'][1]['value']}\n")
+        slide_num = 1
+        lines.append(f"## Slide {slide_num}\n### 页面要点\n- 课程标题：{course['title']}\n- 学习者画像综述\n### 讲解备注\n- 开场介绍课程主线与学习目标\n")
+        slide_num += 1
+        for module in focus_modules[:4]:
+            title = module.get("title", "")
+            points = module.get("core_points", [])
+            lines.append(f"## Slide {slide_num}\n### 页面要点\n- 模块：{title}\n" + "\n".join(f"- {p}" for p in points[:3]) + "\n### 讲解备注\n- 结合学习者画像强调重点概念和常见误区\n")
+            slide_num += 1
+        lines.append(f"## Slide {slide_num}\n### 页面要点\n- 分层练习概览\n- 基础 → 标准 → 迁移\n### 讲解备注\n- 建议先展示题目，再逐步展开解析\n")
+        slide_num += 1
+        lines.append(f"## Slide {slide_num}\n### 页面要点\n- 课程总结与下一步\n- 推荐学习资源\n### 讲解备注\n- 回顾关键概念，引导进入自评环节\n")
+        return {
+            "resource_id": "slide-outline",
+            "type": "slide_outline",
+            "title": "PPT 教学大纲",
+            "summary": f"基于 {len(focus_modules)} 个核心模块生成 {slide_num} 页 PPT 大纲，含页面要点和讲解备注。",
+            "estimated_minutes": 12,
+            "agent_id": "curator",
+            "source_refs": self._source_refs_for([m.get("module_id", "") for m in focus_modules[:2]]),
+            "content_markdown": "\n".join(lines),
+        }
+
+    # ── Phase 5: Interaction helpers ────────────────────
+
+    @staticmethod
+    def _build_practice_interaction(focus_modules: list[dict[str, Any]], kb_exercises: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+        """Build interactive exercise items from KB exercises (max 12)."""
+        items: list[dict[str, Any]] = []
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            for ex in kb_exercises.get(mid, []):
+                items.append({
+                    "exercise_id": ex.get("exercise_id", ""),
+                    "module_id": mid,
+                    "module_title": module.get("title", ""),
+                    "level": ex.get("level", "standard"),
+                    "type": ex.get("type", "short_answer"),
+                    "prompt": ex.get("prompt", ""),
+                    "target_concepts": ex.get("target_concepts", []),
+                    "hint": f"回顾「{module.get('title', '')}」中的相关概念，注意区分容易混淆的知识点。",
+                    "answer_outline": ex.get("answer_outline", ""),
+                    "feedback": {
+                        "correct": "回答正确！建议回顾相关概念的深层原理。",
+                        "stuck": f"不会的话，先复习「{module.get('title', '')}」中的核心定义和例子。",
+                        "common_mistake": "最常见的错误是混淆概念边界或遗漏边界条件。",
+                    },
+                    "source_refs": ex.get("source_refs", []),
+                })
+                if len(items) >= 12:
+                    break
+            if len(items) >= 12:
+                break
+        return {"kind": "practice_pack", "items": items}
+
+    @staticmethod
+    def _build_lab_interaction(first_module: dict[str, Any], kb_labs: dict[str, str]) -> dict[str, Any]:
+        """Build interactive lab steps from lab.md content."""
+        steps: list[dict[str, Any]] = [
+            {"step_id": "step-1", "description": "阅读任务目标和输入输出", "is_done": False},
+            {"step_id": "step-2", "description": "实现核心逻辑（数据结构类、算法函数）", "is_done": False},
+            {"step_id": "step-3", "description": "编写性能测试脚本", "is_done": False},
+            {"step_id": "step-4", "description": "运行测试并整理结果", "is_done": False},
+        ]
+        deliverables: list[dict[str, Any]] = [
+            {"item_id": "del-1", "description": "项目源码（含 README.md）", "is_done": False},
+            {"item_id": "del-2", "description": "设计文档（design.md）", "is_done": False},
+            {"item_id": "del-3", "description": "运行截图或实验结果", "is_done": False},
+        ]
+        reflections: list[dict[str, Any]] = [
+            {"question": "项目中最大的选型挑战是什么？", "answer": ""},
+            {"question": "如果项目规模扩大 10 倍，哪些选择需要重新考虑？", "answer": ""},
+            {"question": "你对数据结构的理解从'死记硬背'转变为'场景匹配'了吗？", "answer": ""},
+        ]
+        return {"kind": "case_lab", "items": [{"steps": steps, "deliverables": deliverables, "reflections": reflections}]}
+
+    @staticmethod
+    def _build_review_interaction(focus_modules: list[dict[str, Any]], kb_concepts: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+        """Build interactive review checklist from KB concept mistakes."""
+        items: list[dict[str, Any]] = []
+        for module in focus_modules:
+            mid = module.get("module_id", "")
+            for ci, c in enumerate(kb_concepts.get(mid, [])):
+                for mi, mistake in enumerate(c.get("common_mistakes", [])):
+                    items.append({
+                        "item_id": f"review-{mid}-{ci}-{mi}",
+                        "description": f"[{c.get('name', '')}] {mistake}",
+                        "module": module.get("title", ""),
+                        "mastered": False,
+                        "score": None,
+                    })
+        return {"kind": "review_sheet", "items": items}
+
+    # ── Phase 3: Recommendations ───────────────────────
+
+    def _build_recommendations(self, profile: dict[str, Any], all_resources: list[dict[str, Any]]) -> dict[str, Any]:
+        dims = profile.get("dimensions", [])
+        baseline = next((d["value"] for d in dims if d["key"] == "baseline"), "")
+        daily_minutes = int(profile.get("daily_minutes", 50))
+        risk = next((d["value"] for d in dims if d["key"] == "risk"), "")
+
+        scored = []
+        for i, r in enumerate(all_resources):
+            score = 0
+            rtype = r.get("type", "")
+            if "基础" in baseline or "入门" in baseline or "待巩固" in baseline:
+                if rtype in ("course_brief", "mind_map", "practice_pack"):
+                    score += 3
+            if daily_minutes <= 35:
+                if int(r.get("estimated_minutes", 30)) <= 20:
+                    score += 2
+            if "考试" in profile.get("overview", ""):
+                if rtype in ("practice_pack", "review_sheet"):
+                    score += 2
+            score += max(0, 5 - i)
+            scored.append((score, r.get("resource_id", ""), rtype))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        today_ids = [rid for _, rid, _ in scored[:5]]
+
+        if "基础" in baseline or "入门" in baseline:
+            next_action = "建议先从「主线讲解」和「知识脑图」入手，建立知识框架后再做题。"
+        elif daily_minutes <= 35:
+            next_action = "时间较碎片化，建议每次只完成一个资源，优先「分层练习」的基础题部分。"
+        else:
+            next_action = "建议按「讲解 → 脑图 → 练习 → 实验」顺序推进，每完成一个模块做一次复盘。"
+
+        adjustments = []
+        if "断层" in risk or "基础" in baseline:
+            adjustments.append("前置概念可能不稳，遇到卡顿先回顾「知识脑图」中的定义。")
+        if "连续性" in risk or "时间" in risk:
+            adjustments.append("建议把每日目标拆成 15 分钟小块，完成即停。")
+        if not adjustments:
+            adjustments.append("当前风险可控，按推荐顺序稳步推进。")
+
+        return {
+            "today_resources": today_ids,
+            "next_action": next_action,
+            "risk_adjustments": adjustments,
+        }
+
+    # ── Phase 3: Enhanced learning path ────────────────
+
+    def _build_enhanced_learning_path(self, profile: dict[str, Any], focus_modules: list[dict[str, Any]], all_resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        base_path = self._build_learning_path(profile, focus_modules)
+        resource_map = {r["resource_id"]: r for r in all_resources}
+        base_path[0]["recommended_resource_ids"] = [
+            rid for rid in ["course-brief", "mind-map", "practice-pack"] if rid in resource_map
+        ]
+        base_path[0]["estimated_days"] = 7
+        base_path[0]["priority_reason"] = "优先建立概念框架，适合入门阶段"
+        base_path[1]["recommended_resource_ids"] = [
+            rid for rid in ["practice-pack", "reading-guide", "slide-outline"] if rid in resource_map
+        ]
+        base_path[1]["estimated_days"] = 10
+        base_path[1]["priority_reason"] = "讲练结合，巩固核心技能"
+        base_path[2]["recommended_resource_ids"] = [
+            rid for rid in ["case-lab", "review-sheet", "slide-outline"] if rid in resource_map
+        ]
+        base_path[2]["estimated_days"] = 7
+        base_path[2]["priority_reason"] = "综合输出，迁移应用能力"
+        return base_path
 
     def _build_learning_path(self, profile: dict[str, Any], focus_modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         weekly_days = int(profile["weekly_days"])

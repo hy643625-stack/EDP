@@ -167,3 +167,9 @@ class UpdateLearningSessionProfileRequest(BaseModel):
     preferred_goal: str | None = Field(default=None, max_length=200)
     weekly_days: int | None = Field(default=None, ge=1, le=7)
     daily_minutes: int | None = Field(default=None, ge=10, le=300)
+
+
+# ── Phase 3: Tutor ─────────────────────────────────────
+
+class LearningTutorRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)

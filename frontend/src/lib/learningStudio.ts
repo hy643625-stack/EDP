@@ -12,6 +12,20 @@ export type LearningStudioDraft = {
 
 const STORAGE_KEY = 'edp.learning.studio.v1'
 
+function hasInteractiveResourcePackage(payload: LearningResourcePackagePayload | null | undefined): boolean {
+  if (!payload?.package?.resources?.length) return false
+  return payload.package.resources.some((resource) => {
+    if (resource.type !== 'practice_pack' && resource.type !== 'case_lab' && resource.type !== 'review_sheet') {
+      return false
+    }
+    return Boolean(resource.interaction?.kind && resource.interaction.items.length > 0)
+  })
+}
+
+function isStaleResourcePackage(payload: LearningResourcePackagePayload | null | undefined): boolean {
+  return !!payload && !hasInteractiveResourcePackage(payload)
+}
+
 function canUseStorage(): boolean {
   return typeof window !== 'undefined' && !!window.localStorage
 }
@@ -26,6 +40,18 @@ export function loadLearningStudioDraft(): LearningStudioDraft | null {
     if (typeof parsed.course_id !== 'string') return null
     if (typeof parsed.conversation !== 'string') return null
     if (typeof parsed.preferred_goal !== 'string') return null
+
+    // Phase 5: discard stale resource packages that lack interaction data
+    const resourcePackage: LearningResourcePackagePayload | null =
+      hasInteractiveResourcePackage(parsed.resource_package)
+        ? (parsed.resource_package ?? null)
+        : null
+
+    if (isStaleResourcePackage(parsed.resource_package)) {
+      // Remove stale entry so next save is clean
+      window.localStorage.removeItem(STORAGE_KEY)
+    }
+
     return {
       course_id: parsed.course_id,
       conversation: parsed.conversation,
@@ -33,7 +59,7 @@ export function loadLearningStudioDraft(): LearningStudioDraft | null {
       weekly_days: Number(parsed.weekly_days) || 4,
       daily_minutes: Number(parsed.daily_minutes) || 50,
       profile: parsed.profile ?? null,
-      resource_package: parsed.resource_package ?? null
+      resource_package: resourcePackage,
     }
   } catch {
     return null

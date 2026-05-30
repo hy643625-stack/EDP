@@ -3,25 +3,44 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
-PID_FILE="$RUN_DIR/pids.env"
-BACKEND_PID_FILE="$RUN_DIR/backend.pid"
-FRONTEND_PID_FILE="$RUN_DIR/frontend.pid"
+BACKEND_PORT="${BACKEND_PORT:-18765}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
-stop_by_pidfile() {
-  local file="$1"
+kill_port() {
+  local port="$1"
   local name="$2"
-  if [ ! -f "$file" ]; then return; fi
-  local pid
-  pid="$(head -1 "$file" 2>/dev/null || true)"
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
-    echo "[$name] stopped pid=$pid"
+  local pids
+  pids="$(lsof -ti ":$port" 2>/dev/null || true)"
+  if [ -z "$pids" ]; then
+    echo "[$name] no process on port $port"
+    return
   fi
-  rm -f "$file"
+  for pid in $pids; do
+    if kill "$pid" 2>/dev/null; then
+      echo "[$name] TERM sent to pid=$pid (port $port)"
+    fi
+  done
+  # Wait up to 3s for graceful shutdown
+  for _ in $(seq 1 6); do
+    pids="$(lsof -ti ":$port" 2>/dev/null || true)"
+    if [ -z "$pids" ]; then
+      echo "[$name] stopped"
+      return
+    fi
+    sleep 0.5
+  done
+  # Force kill remaining
+  pids="$(lsof -ti ":$port" 2>/dev/null || true)"
+  for pid in $pids; do
+    kill -9 "$pid" 2>/dev/null || true
+    echo "[$name] KILL sent to pid=$pid (port $port)"
+  done
+  sleep 0.5
+  echo "[$name] force stopped"
 }
 
-stop_by_pidfile "$BACKEND_PID_FILE" "backend"
-stop_by_pidfile "$FRONTEND_PID_FILE" "frontend"
-rm -f "$PID_FILE"
+kill_port "$BACKEND_PORT" "backend"
+kill_port "$FRONTEND_PORT" "frontend"
 
+rm -f "$RUN_DIR/backend.pid" "$RUN_DIR/frontend.pid" "$RUN_DIR/pids.env"
 echo "[ok] stop completed"

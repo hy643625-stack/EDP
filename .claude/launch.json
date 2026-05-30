@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["./node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", "5173"],
+      "port": 5173,
+      "cwd": "${workspaceFolder}/frontend"
+    },
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "18765"],
+      "port": 18765,
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, BrainCircuit, Copy, Download, GraduationCap, MapPinned, PlusCircle, Sparkles, Wand2 } from 'lucide-react'
+import { Bot, BrainCircuit, ChevronDown, ChevronRight, ClipboardList, Copy, Download, GraduationCap, LayoutDashboard, MapPinned, MessageSquare, PlusCircle, Sparkles, Wand2 } from 'lucide-react'
 
 import { api } from '@/api/client'
 import type {
   LearningAgentRun,
   LearningCourse,
   LearningProfilePayload,
+  LearningResourceCard,
   LearningResourcePackagePayload,
+  LearningTutorResponse,
   LearningWorkbenchPayload
 } from '@/api/types'
 import { downloadTextFile } from '@/lib/ai'
@@ -17,30 +19,42 @@ import {
   saveLearningStudioDraft
 } from '@/lib/learningStudio'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../../packages/ui/src'
-import { ResourceCard } from './ResourceCard'
+import { LearningDetailDrawer } from './LearningDetailDrawer'
+import { InteractiveCaseLab } from './InteractiveCaseLab'
+import { InteractivePracticePanel } from './InteractivePracticePanel'
+import { InteractiveReviewSheet } from './InteractiveReviewSheet'
+import { MarkdownRenderer } from './MarkdownRenderer'
+import { ResourceTile } from './ResourceTile'
 
 type LearningStudioTabProps = {
   onOpenAiSettings: () => void
 }
 
+type DetailContent = {
+  title: string
+  type: 'resource' | 'profile' | 'path-stage' | 'evaluation'
+  data: unknown
+}
+
+type ViewTab = 'overview' | 'resources' | 'path' | 'evaluation'
+
+const TABS: { key: ViewTab; label: string; icon: React.ReactNode }[] = [
+  { key: 'overview', label: '总览', icon: <LayoutDashboard className="h-3.5 w-3.5" /> },
+  { key: 'resources', label: '资源', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { key: 'path', label: '路径', icon: <MapPinned className="h-3.5 w-3.5" /> },
+  { key: 'evaluation', label: '评估', icon: <ClipboardList className="h-3.5 w-3.5" /> },
+]
+
 function runtimeModeLabel(modeUsed: 'local_rules' | 'model'): string {
   return modeUsed === 'model' ? 'AI 模型增强' : '本地规则生成'
 }
 
-function agentStatusBadge(status: string) {
-  switch (status) {
-    case 'completed':
-      return <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">已完成</span>
-    case 'fallback':
-      return <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">降级</span>
-    case 'failed':
-      return <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700">失败</span>
-    default:
-      return <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">待执行</span>
-  }
+function agentStatusColor(status: string) {
+  return status === 'completed' ? 'bg-emerald-400' : status === 'fallback' ? 'bg-amber-400' : status === 'failed' ? 'bg-rose-400' : 'bg-slate-300'
 }
 
 export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) {
+  // ── Core state ──
   const [workbench, setWorkbench] = useState<LearningWorkbenchPayload | null>(null)
   const [courseId, setCourseId] = useState('')
   const [conversation, setConversation] = useState('')
@@ -57,33 +71,35 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
   const [exported, setExported] = useState(false)
   const hydratedRef = useRef(false)
 
-  // Phase 2: Session state
+  // ── Phase 2: Session state ──
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [profileVersion, setProfileVersion] = useState<number>(0)
   const [sessionTitle, setSessionTitle] = useState<string>('')
   const [agentRuns, setAgentRuns] = useState<LearningAgentRun[]>([])
 
+  // ── Phase 4: UI state ──
+  const [activeView, setActiveView] = useState<ViewTab>('overview')
+  const [drawer, setDrawer] = useState<DetailContent | null>(null)
+  const [showModules, setShowModules] = useState(false)
+  const [showAgents, setShowAgents] = useState(false)
+  const [tutorQuestion, setTutorQuestion] = useState('')
+  const [tutorResult, setTutorResult] = useState<LearningTutorResponse | null>(null)
+  const [tutorLoading, setTutorLoading] = useState(false)
+
+  // ── Derived ──
   const courses = workbench?.courses ?? []
   const selectedCourse = useMemo<LearningCourse | null>(
     () => courses.find((item) => item.course_id === courseId) ?? courses[0] ?? null,
     [courses, courseId]
   )
+  const completed = agentRuns.filter(a => a.status === 'completed').length
+  const fallbackCount = agentRuns.filter(a => a.status === 'fallback').length
 
-  useEffect(() => {
-    void bootstrap()
-  }, [])
-
+  // ── Lifecycle ──
+  useEffect(() => { void bootstrap() }, [])
   useEffect(() => {
     if (!hydratedRef.current || !courseId) return
-    saveLearningStudioDraft({
-      course_id: courseId,
-      conversation,
-      preferred_goal: preferredGoal,
-      weekly_days: weeklyDays,
-      daily_minutes: dailyMinutes,
-      profile,
-      resource_package: resourcePackage
-    })
+    saveLearningStudioDraft({ course_id: courseId, conversation, preferred_goal: preferredGoal, weekly_days: weeklyDays, daily_minutes: dailyMinutes, profile, resource_package: resourcePackage })
   }, [courseId, conversation, preferredGoal, weeklyDays, dailyMinutes, profile, resourcePackage])
 
   async function bootstrap() {
@@ -92,8 +108,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
       const payload = await api.getLearningWorkbench()
       setWorkbench(payload)
       const draft = loadLearningStudioDraft()
-      const defaultCourseId = draft?.course_id || payload.courses[0]?.course_id || ''
-      setCourseId(defaultCourseId)
+      setCourseId(draft?.course_id || payload.courses[0]?.course_id || '')
       setConversation(draft?.conversation || '我正在准备这门课，希望系统根据我的基础、时间和目标，为我生成更适合我的学习资源与学习路径。')
       setPreferredGoal(draft?.preferred_goal || '')
       setWeeklyDays(draft?.weekly_days || 4)
@@ -104,124 +119,109 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
       setError('')
     } catch (raw) {
       setError(raw instanceof Error ? raw.message : String(raw))
-    } finally {
-      setLoadingWorkbench(false)
-    }
+    } finally { setLoadingWorkbench(false) }
   }
 
   function resetSession() {
-    setSessionId(null)
-    setProfileVersion(0)
-    setSessionTitle('')
-    setAgentRuns([])
-    setProfile(null)
-    setResourcePackage(null)
+    setSessionId(null); setProfileVersion(0); setSessionTitle('')
+    setAgentRuns([]); setProfile(null); setResourcePackage(null)
+    setActiveView('overview'); setTutorResult(null)
   }
 
+  // ── API handlers ──
   async function handleBuildProfile() {
-    if (!courseId || !conversation.trim()) {
-      setError('请先选择课程并输入学习描述。')
-      return
-    }
+    if (!courseId || !conversation.trim()) { setError('请先选择课程并输入学习描述。'); return }
     setBuildingProfile(true)
     try {
-      // Phase 2: create session instead of old profile endpoint
       const result = await api.createLearningSession({
-        course_id: courseId,
-        conversation,
-        preferred_goal: preferredGoal,
-        weekly_days: weeklyDays,
-        daily_minutes: dailyMinutes,
+        course_id: courseId, conversation, preferred_goal: preferredGoal, weekly_days: weeklyDays, daily_minutes: dailyMinutes,
         title: `${selectedCourse?.title || '学习'} - ${new Date().toLocaleDateString('zh-CN')}`,
       })
       setSessionId(result.session?.id || null)
       setProfileVersion(result.profile_version || 1)
       setSessionTitle(result.session?.title || '')
       setProfile({
-        course: result.course,
-        profile: result.profile,
+        course: result.course, profile: result.profile,
         mode_requested: result.mode_requested as LearningProfilePayload['mode_requested'],
         mode_used: (result.mode_used || 'local_rules') as LearningProfilePayload['mode_used'],
-        provider_id: result.provider_id,
-        runtime_message: result.runtime_message,
-        fallback_reason: result.fallback_reason,
-        generated_at: result.generated_at,
+        provider_id: result.provider_id, runtime_message: result.runtime_message,
+        fallback_reason: result.fallback_reason, generated_at: result.generated_at,
       })
+      setActiveView('overview')
       setError('')
-    } catch (raw) {
-      setError(raw instanceof Error ? raw.message : String(raw))
-    } finally {
-      setBuildingProfile(false)
-    }
+    } catch (raw) { setError(raw instanceof Error ? raw.message : String(raw)) }
+    finally { setBuildingProfile(false) }
   }
 
   async function handleGeneratePackage() {
-    if (!courseId || !conversation.trim()) {
-      setError('请先填写学习描述，再生成资源包。')
-      return
-    }
+    if (!courseId || !conversation.trim()) { setError('请先填写学习描述，再生成资源包。'); return }
     setBuildingPackage(true)
     try {
       let payload: LearningResourcePackagePayload
-      if (sessionId) {
-        // Phase 2: use session-based pipeline
-        payload = await api.generateSessionResourcePackage(sessionId)
-      } else {
-        // Fallback: old API
-        payload = await api.generateLearningResourcePackage({
-          course_id: courseId,
-          conversation,
-          preferred_goal: preferredGoal,
-          weekly_days: weeklyDays,
-          daily_minutes: dailyMinutes,
-        })
-      }
+      if (sessionId) payload = await api.generateSessionResourcePackage(sessionId)
+      else payload = await api.generateLearningResourcePackage({ course_id: courseId, conversation, preferred_goal: preferredGoal, weekly_days: weeklyDays, daily_minutes: dailyMinutes })
       setProfile({
-        course: payload.course,
-        profile: payload.profile,
-        mode_requested: payload.mode_requested,
-        mode_used: payload.mode_used,
-        provider_id: payload.provider_id,
-        runtime_message: payload.runtime_message,
-        fallback_reason: payload.fallback_reason,
-        generated_at: payload.generated_at,
+        course: payload.course, profile: payload.profile,
+        mode_requested: payload.mode_requested, mode_used: payload.mode_used,
+        provider_id: payload.provider_id, runtime_message: payload.runtime_message,
+        fallback_reason: payload.fallback_reason, generated_at: payload.generated_at,
       })
       setResourcePackage(payload)
-      // Capture agent runs from response
-      const agentRunsField = (payload as unknown as Record<string, unknown>).agent_runs
-      if (Array.isArray(agentRunsField)) setAgentRuns(agentRunsField as LearningAgentRun[])
-      // Also check package.agent_runs
-      const pkgRuns = payload.package?.agent_runs
-      if (pkgRuns && pkgRuns.length > 0) setAgentRuns(pkgRuns as LearningAgentRun[])
+      const runs = (payload as unknown as Record<string, unknown>).agent_runs
+      if (Array.isArray(runs)) setAgentRuns(runs as LearningAgentRun[])
+      if (payload.package?.agent_runs?.length) setAgentRuns(payload.package.agent_runs as LearningAgentRun[])
+      setActiveView('resources')
+      setTutorResult(null)
       setError('')
-    } catch (raw) {
-      setError(raw instanceof Error ? raw.message : String(raw))
-    } finally {
-      setBuildingPackage(false)
-    }
+    } catch (raw) { setError(raw instanceof Error ? raw.message : String(raw)) }
+    finally { setBuildingPackage(false) }
   }
 
   async function handleCopyPackage() {
     if (!resourcePackage) return
     await navigator.clipboard.writeText(buildLearningPackageMarkdown(resourcePackage))
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1800)
+    setCopied(true); setTimeout(() => setCopied(false), 1800)
   }
 
   function handleExportPackage() {
     if (!resourcePackage) return
-    downloadTextFile(
-      buildLearningPackageMarkdown(resourcePackage),
-      buildLearningPackageFilename(resourcePackage),
-      'text/markdown;charset=utf-8'
-    )
-    setExported(true)
-    window.setTimeout(() => setExported(false), 1800)
+    downloadTextFile(buildLearningPackageMarkdown(resourcePackage), buildLearningPackageFilename(resourcePackage), 'text/markdown;charset=utf-8')
+    setExported(true); setTimeout(() => setExported(false), 1800)
   }
 
+  async function handleTutorSubmit() {
+    const q = tutorQuestion.trim()
+    if (!q || !sessionId) return
+    setTutorLoading(true)
+    try {
+      const res = await api.tutorLearningSession(sessionId, q)
+      setTutorResult(res)
+    } catch (raw) { setError(raw instanceof Error ? raw.message : String(raw)) }
+    finally { setTutorLoading(false) }
+  }
+
+  // ── Detail openers ──
+  function openResourceDetail(r: LearningResourceCard) {
+    setDrawer({ title: r.title, type: 'resource', data: r })
+  }
+  function openProfileDetail() {
+    if (!profile) return
+    setDrawer({ title: '画像详情', type: 'profile', data: profile.profile })
+  }
+  function openPathDetail(stageIdx: number) {
+    if (!resourcePackage) return
+    const stage = resourcePackage.package.learning_path[stageIdx]
+    if (stage) setDrawer({ title: stage.title, type: 'path-stage', data: stage })
+  }
+  function openEvaluationDetail() {
+    if (!resourcePackage) return
+    setDrawer({ title: '评估详情', type: 'evaluation', data: resourcePackage.package.evaluation })
+  }
+
+  // ── Render ──
   return (
     <div className="grid gap-4 lg:grid-cols-12">
-      {/* ── Session status bar ── */}
+      {/* Session bar */}
       {sessionId ? (
         <div className="lg:col-span-12 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -229,258 +229,385 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
             <span className="text-sm font-medium text-slate-800">{sessionTitle}</span>
             <span className="text-xs text-slate-500">画像 v{profileVersion}</span>
           </div>
-          <Button variant="ghost" size="sm" iconLeft={<PlusCircle className="h-4 w-4" />} onClick={resetSession}>
-            新建会话
-          </Button>
+          <Button variant="ghost" size="sm" iconLeft={<PlusCircle className="h-4 w-4" />} onClick={resetSession}>新建会话</Button>
         </div>
       ) : null}
 
+      {/* Input card */}
       <Card className="lg:col-span-12">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="inline-flex items-center gap-2 text-base">
-              <GraduationCap className="h-4 w-4 text-[var(--edp-brand-strong)]" />
-              学习智能体工作台
-            </CardTitle>
-            <p className="mt-1 text-sm text-slate-500">基于学习画像、多智能体资源生成和学习路径规划，把当前项目扩展为可用的学习辅助入口。</p>
+            <CardTitle className="inline-flex items-center gap-2 text-base"><GraduationCap className="h-4 w-4 text-[var(--edp-brand-strong)]" />学习智能体工作台</CardTitle>
+            <p className="mt-1 text-sm text-slate-500">基于学习画像、多智能体资源生成和学习路径规划。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" iconLeft={<Bot className="h-4 w-4" />} onClick={onOpenAiSettings}>
-              AI 设置
-            </Button>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
-              {workbench?.runtime.runtime_message || '正在加载运行状态...'}
-            </span>
+            <Button variant="ghost" iconLeft={<Bot className="h-4 w-4" />} onClick={onOpenAiSettings}>AI 设置</Button>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">{workbench?.runtime.runtime_message || '加载中...'}</span>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">课程知识库</span>
-                <select className="input-clean w-full" value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={loadingWorkbench}>
-                  {courses.map((course) => (
-                    <option key={course.course_id} value={course.course_id}>{course.title}</option>
-                  ))}
+              <label className="space-y-1"><span className="text-xs font-medium text-slate-600">课程知识库</span>
+                <select className="input-clean w-full" value={courseId} onChange={e => setCourseId(e.target.value)} disabled={loadingWorkbench}>
+                  {courses.map(c => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">学习目标（可选）</span>
-                <input className="input-clean w-full" value={preferredGoal} onChange={(e) => setPreferredGoal(e.target.value)} placeholder="例如：期末提分 / 面试准备 / 项目落地" />
+              <label className="space-y-1"><span className="text-xs font-medium text-slate-600">学习目标（可选）</span>
+                <input className="input-clean w-full" value={preferredGoal} onChange={e => setPreferredGoal(e.target.value)} placeholder="例如：期末提分 / 面试准备" />
               </label>
             </div>
-
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">每周可学天数</span>
-                <input className="input-clean w-full" type="number" min={1} max={7} value={weeklyDays} onChange={(e) => setWeeklyDays(Number(e.target.value || 4))} />
+              <label className="space-y-1"><span className="text-xs font-medium text-slate-600">每周可学天数</span>
+                <input className="input-clean w-full" type="number" min={1} max={7} value={weeklyDays} onChange={e => setWeeklyDays(Number(e.target.value || 4))} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">每天可投入分钟</span>
-                <input className="input-clean w-full" type="number" min={10} max={300} value={dailyMinutes} onChange={(e) => setDailyMinutes(Number(e.target.value || 50))} />
+              <label className="space-y-1"><span className="text-xs font-medium text-slate-600">每天可投入分钟</span>
+                <input className="input-clean w-full" type="number" min={10} max={300} value={dailyMinutes} onChange={e => setDailyMinutes(Number(e.target.value || 50))} />
               </label>
             </div>
-
-            <label className="space-y-1">
-              <span className="text-xs font-medium text-slate-600">学习描述</span>
-              <textarea
-                className="input-clean min-h-[180px] w-full resize-y"
-                value={conversation}
-                onChange={(e) => setConversation(e.target.value)}
-                placeholder="描述你的基础、目标、时间、困难点、喜欢的学习方式。比如：我正在准备数据结构期末，树和图总是看不懂，平时只有晚上能学 1 小时，希望多一些图解和例题。"
-              />
+            <label className="space-y-1"><span className="text-xs font-medium text-slate-600">学习描述</span>
+              <textarea className="input-clean min-h-[140px] w-full resize-y" value={conversation} onChange={e => setConversation(e.target.value)}
+                placeholder="描述你的基础、目标、时间、困难点、喜欢的学习方式。" />
             </label>
-
             <div className="flex flex-wrap gap-2">
               <Button iconLeft={<BrainCircuit className="h-4 w-4" />} onClick={() => void handleBuildProfile()} disabled={buildingProfile || loadingWorkbench}>
-                {buildingProfile ? '正在构建画像...' : '构建学习画像'}
+                {buildingProfile ? '构建中...' : '构建学习画像'}
               </Button>
               <Button iconLeft={<Wand2 className="h-4 w-4" />} onClick={() => void handleGeneratePackage()} disabled={buildingPackage || loadingWorkbench}>
-                {buildingPackage ? '正在生成资源包...' : '生成个性化资源包'}
+                {buildingPackage ? '生成中...' : '生成个性化资源包'}
               </Button>
-              <Button variant="ghost" iconLeft={<Copy className="h-4 w-4" />} onClick={() => void handleCopyPackage()} disabled={!resourcePackage}>
-                {copied ? '已复制' : '复制资源包'}
-              </Button>
-              <Button variant="ghost" iconLeft={<Download className="h-4 w-4" />} onClick={handleExportPackage} disabled={!resourcePackage}>
-                {exported ? '已导出' : '导出 Markdown'}
-              </Button>
+              <Button variant="ghost" iconLeft={<Copy className="h-4 w-4" />} onClick={() => void handleCopyPackage()} disabled={!resourcePackage}>{copied ? '已复制' : '复制'}</Button>
+              <Button variant="ghost" iconLeft={<Download className="h-4 w-4" />} onClick={handleExportPackage} disabled={!resourcePackage}>{exported ? '已导出' : '导出'}</Button>
             </div>
-
             {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
-            {workbench?.privacy_notice ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-700">{workbench.privacy_notice}</div> : null}
           </div>
 
+          {/* Right panel: course preview (collapsed) + agent status (collapsed) */}
           <div className="space-y-3">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-              <p className="text-xs font-semibold text-slate-600">课程预览</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">{selectedCourse?.title || '未选择课程'}</p>
-              <p className="mt-1 text-sm text-slate-500">{selectedCourse?.summary}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(selectedCourse?.tags || []).map((tag) => (
-                  <span key={tag} className="rounded-full bg-white px-2.5 py-1 text-[11px] text-slate-600">{tag}</span>
-                ))}
-              </div>
-              <div className="mt-4 space-y-2">
-                {(selectedCourse?.modules || []).slice(0, 8).map((module) => (
-                  <div key={module.module_id} className="rounded-xl border border-slate-200 bg-white p-3">
-                    <p className="text-sm font-medium text-slate-800">{module.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{module.core_points.join(' / ')}</p>
-                  </div>
-                ))}
-              </div>
+              <button onClick={() => setShowModules(!showModules)} className="flex items-center justify-between w-full text-left">
+                <span className="text-xs font-semibold text-slate-600">{selectedCourse?.title || '未选择'} · {selectedCourse?.module_count || 0} 模块</span>
+                {showModules ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+              </button>
+              {showModules ? (
+                <div className="mt-3 space-y-2">
+                  {(selectedCourse?.modules || []).map(m => (
+                    <div key={m.module_id} className="rounded-xl border border-slate-200 bg-white p-2.5">
+                      <p className="text-sm font-medium text-slate-800">{m.title}</p>
+                      <p className="text-xs text-slate-500">{m.core_points?.join(' / ')}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
-            {/* ── Agent runs panel ── */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold text-slate-600">多智能体协同链路</p>
-              <div className="mt-3 space-y-2">
-                {(agentRuns.length > 0 ? agentRuns : (workbench?.agents || [])).map((agent) => (
-                  <div key={agent.agent_id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-slate-900">
-                        {'name' in agent ? agent.name : agent.agent_id}
-                      </p>
-                      {'status' in agent
-                        ? agentStatusBadge(agent.status)
-                        : <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">待执行</span>
-                      }
+              <button onClick={() => setShowAgents(!showAgents)} className="flex items-center justify-between w-full text-left">
+                <span className="text-xs font-semibold text-slate-600">智能体链路 · {completed}/{agentRuns.length || (workbench?.agents || []).length} 完成</span>
+                {showAgents ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+              </button>
+              {!showAgents ? (
+                <div className="mt-2 flex gap-1">
+                  {(agentRuns.length > 0 ? agentRuns : (workbench?.agents || [])).map((a, i) => (
+                    <span key={`${a.agent_id}-${i}`} className={`h-2 w-5 rounded-full ${'status' in a ? agentStatusColor(a.status) : 'bg-slate-300'}`} />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 space-y-1.5">
+                  {(agentRuns.length > 0 ? agentRuns : (workbench?.agents || [])).map((a, i) => (
+                    <div key={`${a.agent_id}-${i}`} className="flex items-center justify-between text-xs text-slate-500">
+                      <span>{'name' in a ? a.name : a.agent_id}</span>
+                      <span className={`inline-block w-2 h-2 rounded-full ${'status' in a ? agentStatusColor(a.status) : 'bg-slate-300'}`} />
                     </div>
-                    {'duration_ms' in agent && agent.duration_ms ? (
-                      <p className="mt-1 text-[11px] text-slate-400">{agent.duration_ms}ms</p>
-                    ) : null}
-                    <p className="mt-1 text-xs leading-6 text-slate-500">
-                      {'output_summary' in agent && agent.output_summary
-                        ? agent.output_summary
-                        : 'summary' in agent ? agent.summary
-                        : 'responsibility' in agent ? agent.responsibility
-                        : ''}
-                    </p>
-                    {'fallback_reason' in agent && agent.fallback_reason ? (
-                      <p className="mt-1 text-[11px] text-amber-600">降级原因：{agent.fallback_reason}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Profile summary */}
       {profile ? (
         <Card className="lg:col-span-12">
-          <CardHeader>
-            <CardTitle className="inline-flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              学习画像
-              {profileVersion > 0 ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">v{profileVersion}</span> : null}
-            </CardTitle>
-            <p className="mt-1 text-sm text-slate-500">{profile.profile.overview}</p>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-500" />学习画像
+                {profileVersion > 0 ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">v{profileVersion}</span> : null}
+              </CardTitle>
+              <p className="mt-1 text-sm text-slate-500 line-clamp-1">{profile.profile.overview}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={openProfileDetail}>详情</Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {profile.profile.dimensions.map((dimension) => (
-                <div key={dimension.key} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                  <p className="text-xs font-semibold text-slate-500">{dimension.label}</p>
-                  <p className="mt-2 text-base font-semibold text-slate-900">{dimension.value}</p>
-                  <p className="mt-2 text-xs leading-6 text-slate-500">{dimension.evidence}</p>
+          <CardContent>
+            <div className="grid gap-3 grid-cols-4 md:grid-cols-8">
+              {profile.profile.dimensions.map(d => (
+                <div key={d.key} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-center">
+                  <p className="text-[11px] text-slate-500">{d.label}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-800 line-clamp-1">{d.value}</p>
                 </div>
               ))}
-            </div>
-            <div className="grid gap-4 lg:grid-cols-3">
-              <InfoListCard title="优势信号" items={profile.profile.strengths} />
-              <InfoListCard title="风险提醒" items={profile.profile.risks} />
-              <InfoListCard title="建议追问" items={profile.profile.follow_up_questions} />
             </div>
           </CardContent>
         </Card>
       ) : null}
 
+      {/* Four-view tabs + content */}
       {resourcePackage ? (
         <>
-          <Card className="lg:col-span-12">
-            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="inline-flex items-center gap-2">
-                  <MapPinned className="h-4 w-4 text-[var(--edp-brand-strong)]" />
-                  学习路径与资源包
-                </CardTitle>
-                <p className="mt-1 text-sm text-slate-500">{resourcePackage.package.package_overview}</p>
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs ${resourcePackage.mode_used === 'model' ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-amber-200 bg-amber-50 text-amber-700'}`}>
-                {runtimeModeLabel(resourcePackage.mode_used)}
-              </span>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-3">
-              {resourcePackage.package.learning_path.map((stage) => (
-                <div key={stage.stage_id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                  <p className="text-xs font-semibold text-slate-500">{stage.title}</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{stage.objective}</p>
-                  <p className="mt-2 text-xs leading-6 text-slate-500">聚焦模块：{stage.focus_modules.join('、')}</p>
-                  <p className="mt-2 text-xs leading-6 text-slate-500">交付物：{stage.deliverables.join('、')}</p>
-                  <p className="mt-2 text-xs leading-6 text-slate-600">{stage.study_plan}</p>
-                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-xs leading-6 text-slate-700">{stage.coach_tip}</p>
+          {/* Tab bar */}
+          <div className="lg:col-span-12 flex gap-1 border-b border-slate-200 pb-0">
+            {TABS.map(tab => (
+              <button key={tab.key} onClick={() => setActiveView(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-t-lg transition-colors
+                  ${activeView === tab.key ? 'bg-white border border-b-white border-slate-200 -mb-px text-[var(--edp-brand-strong)] font-medium' : 'text-slate-500 hover:text-slate-700'}`}>
+                {tab.icon}{tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── OVERVIEW ── */}
+          {activeView === 'overview' ? (
+            <Card className="lg:col-span-12">
+              <CardContent className="pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard label="资源数量" value={`${resourcePackage.package.resource_count} 个`} />
+                <StatCard label="学习阶段" value={`${resourcePackage.package.learning_path.length} 阶段`} />
+                <StatCard label="智能体完成" value={`${completed}/${agentRuns.length}`} />
+                <StatCard label="今日推荐" value={`${resourcePackage.package.recommendations?.today_resources?.length || 0} 个`} />
+                {resourcePackage.package.recommendations?.next_action ? (
+                  <div className="sm:col-span-2 lg:col-span-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-medium text-slate-500">下一步建议</p>
+                    <p className="mt-1 text-sm text-slate-700">{resourcePackage.package.recommendations.next_action}</p>
+                  </div>
+                ) : null}
+                {resourcePackage.package.recommendations?.risk_adjustments?.length ? (
+                  <div className="sm:col-span-2 lg:col-span-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-medium text-amber-600">风险提醒</p>
+                    {resourcePackage.package.recommendations.risk_adjustments.map((r, i) => (
+                      <p key={i} className="mt-1 text-sm text-amber-700">· {r}</p>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* ── RESOURCES ── */}
+          {activeView === 'resources' ? (
+            <div className="lg:col-span-12 grid gap-4">
+              {/* Tutor entry */}
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare className="h-4 w-4 text-indigo-500" />
+                  <span className="text-sm font-medium text-indigo-700">智能辅导</span>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-12">
-            <CardHeader>
-              <CardTitle>个性化资源生成结果</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">{resourcePackage.package.coach_message}</p>
-            </CardHeader>
-            <CardContent className="grid gap-4 xl:grid-cols-2">
-              {resourcePackage.package.resources.map((resource) => (
-                <ResourceCard
-                  key={resource.resource_id}
-                  type={resource.type}
-                  title={resource.title}
-                  summary={resource.summary}
-                  estimatedMinutes={resource.estimated_minutes}
-                  contentMarkdown={resource.content_markdown}
-                  sourceRefs={resource.source_refs}
-                  safetyReview={resource.safety_review}
-                />
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-12">
-            <CardHeader>
-              <CardTitle>学习效果评估</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">{resourcePackage.runtime_message}</p>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-3">
-              <InfoListCard title="掌握信号" items={resourcePackage.package.evaluation.mastery_signals} />
-              <InfoListCard title="自检问题" items={resourcePackage.package.evaluation.self_check_questions} />
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                <p className="text-sm font-semibold text-slate-900">达成等级</p>
-                <div className="mt-3 space-y-2">
-                  {resourcePackage.package.evaluation.rubric.map((item) => (
-                    <div key={item.level} className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-sm font-medium text-slate-800">{item.level}</p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">{item.description}</p>
+                {!sessionId ? (
+                  <p className="text-xs text-slate-500">请先点击「构建学习画像」创建会话后使用智能辅导。</p>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <input className="input-clean flex-1" value={tutorQuestion} onChange={e => setTutorQuestion(e.target.value)}
+                        placeholder="输入学习问题，如：时间复杂度怎么学？" onKeyDown={e => e.key === 'Enter' && handleTutorSubmit()} />
+                      <Button size="sm" onClick={() => void handleTutorSubmit()} disabled={tutorLoading || !tutorQuestion.trim()}>
+                        {tutorLoading ? '...' : '提问'}
+                      </Button>
                     </div>
-                  ))}
-                </div>
+                    {tutorResult ? (
+                      <div className="mt-3 rounded-xl bg-white border border-indigo-200 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${tutorResult.confidence >= 0.5 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            置信度 {Math.round(tutorResult.confidence * 100)}%
+                          </span>
+                          <span className="text-xs text-slate-400">{tutorResult.related_resources.length} 关联资源</span>
+                        </div>
+                        <MarkdownRenderer content={tutorResult.answer_markdown} />
+                        {tutorResult.related_resources.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {tutorResult.related_resources.map(rr => (
+                              <button key={rr.resource_id}
+                                onClick={() => {
+                                  const full = resourcePackage?.package.resources.find(f => f.resource_id === rr.resource_id)
+                                  if (full) openResourceDetail(full)
+                                }}
+                                className="text-left rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+                                <p className="text-xs font-medium text-slate-700">{rr.title}</p>
+                                <p className="text-[11px] text-slate-400 line-clamp-1">{rr.summary}</p>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Resource tiles */}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {resourcePackage.package.resources.map(r => (
+                  <ResourceTile key={r.resource_id} type={r.type} title={r.title} summary={r.summary}
+                    estimatedMinutes={r.estimated_minutes} sourceRefs={r.source_refs}
+                    safetyPassed={r.safety_review?.grounding_passed} onClick={() => openResourceDetail(r)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ── PATH ── */}
+          {activeView === 'path' ? (
+            <Card className="lg:col-span-12">
+              <CardContent className="pt-4 grid gap-4 lg:grid-cols-3">
+                {resourcePackage.package.learning_path.map((stage, idx) => (
+                  <div key={stage.stage_id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 cursor-pointer hover:border-slate-300" onClick={() => openPathDetail(idx)}>
+                    <p className="text-xs font-semibold text-slate-500">{stage.title}</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{stage.objective}</p>
+                    <p className="mt-2 text-xs text-slate-500">交付物 {stage.deliverables.length} 个
+                      {stage.recommended_resource_ids ? ` · 推荐资源 ${stage.recommended_resource_ids.length} 个` : ''}
+                    </p>
+                    {stage.priority_reason ? <p className="mt-2 text-xs text-slate-400 italic">{stage.priority_reason}</p> : null}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* ── EVALUATION ── */}
+          {activeView === 'evaluation' ? (
+            <Card className="lg:col-span-12">
+              <CardContent className="pt-4 grid gap-4 sm:grid-cols-3">
+                <StatCard label="掌握信号" value={`${resourcePackage.package.evaluation.mastery_signals.length} 条`} />
+                <StatCard label="自检问题" value={`${resourcePackage.package.evaluation.self_check_questions.length} 条`} />
+                <StatCard label="达成等级" value={resourcePackage.package.evaluation.rubric.map(r => r.level).join(' / ')} />
+              </CardContent>
+              <div className="px-4 pb-4">
+                <Button variant="ghost" size="sm" onClick={openEvaluationDetail}>查看完整评估</Button>
+              </div>
+            </Card>
+          ) : null}
         </>
       ) : null}
+
+      {/* ── Detail Drawer ── */}
+      <LearningDetailDrawer open={!!drawer} onClose={() => setDrawer(null)} title={drawer?.title || ''}>
+        {drawer?.type === 'resource' ? (() => {
+          const r = drawer.data as LearningResourceCard
+          const hasInteraction = r.interaction?.kind
+          const isInteractiveType = r.type === 'practice_pack' || r.type === 'case_lab' || r.type === 'review_sheet'
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">{r.summary}</p>
+              {r.source_refs?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {r.source_refs.map(ref => (
+                    <span key={ref} className={`rounded-full px-2 py-0.5 text-[10px] ${ref.startsWith('module:') ? 'bg-blue-50 text-blue-600 border border-blue-200' : ref.startsWith('source:') ? 'bg-purple-50 text-purple-600 border border-purple-200' : 'bg-slate-100 text-slate-500'}`}>{ref}</span>
+                  ))}
+                </div>
+              ) : null}
+              {isInteractiveType && !hasInteraction ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                  当前资源包未包含交互数据，可能是旧缓存或旧版本生成的内容，请重新生成资源包后再查看交互。
+                </div>
+              ) : null}
+              {hasInteraction === 'practice_pack' ? <InteractivePracticePanel resource={r} /> :
+               hasInteraction === 'case_lab' ? <InteractiveCaseLab resource={r} /> :
+               hasInteraction === 'review_sheet' ? <InteractiveReviewSheet resource={r} /> : null}
+              {hasInteraction ? (
+                <details className="mt-4">
+                  <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">完整说明 (Markdown)</summary>
+                  <div className="mt-2"><MarkdownRenderer content={r.content_markdown} /></div>
+                </details>
+              ) : (
+                <MarkdownRenderer content={r.content_markdown} />
+              )}
+              {r.safety_review ? (
+                <div className={`rounded-lg p-3 text-xs ${r.safety_review.grounding_passed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {r.safety_review.grounding_passed ? '内容可溯源' : 'grounding 未通过'}
+                  {r.safety_review.warnings?.length ? <span className="ml-2 text-amber-600">({r.safety_review.warnings.length} 告警)</span> : null}
+                </div>
+              ) : null}
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" iconLeft={<Copy className="h-4 w-4" />} onClick={() => { navigator.clipboard.writeText(r.content_markdown); setCopied(true); setTimeout(() => setCopied(false), 1800) }}>复制内容</Button>
+              </div>
+            </div>
+          )
+        })() : drawer?.type === 'profile' ? (() => {
+          const p = drawer.data as LearningProfilePayload['profile']
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">{p.overview}</p>
+              <div className="space-y-3">
+                {p.dimensions.map(d => (
+                  <div key={d.key} className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs font-semibold text-slate-500">{d.label} · 置信度 {(d.confidence * 100).toFixed(0)}%</p>
+                    <p className="mt-1 text-sm font-medium text-slate-800">{d.value}</p>
+                    <p className="mt-1 text-xs text-slate-500">{d.evidence}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <InfoBlock title="优势信号" items={p.strengths} />
+                <InfoBlock title="风险提醒" items={p.risks} />
+                <InfoBlock title="建议追问" items={p.follow_up_questions} />
+              </div>
+            </div>
+          )
+        })() : drawer?.type === 'path-stage' ? (() => {
+          const s = drawer.data as Record<string, unknown>
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">{s.objective as string}</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-medium text-slate-500">学习计划</p><p className="mt-1 text-sm text-slate-700">{s.study_plan as string}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-xs font-medium text-slate-500">教练提醒</p><p className="mt-1 text-sm text-slate-700">{s.coach_tip as string}</p>
+              </div>
+              {(s.focus_modules as string[])?.length ? <InfoBlock title="聚焦模块" items={s.focus_modules as string[]} /> : null}
+              {(s.deliverables as string[])?.length ? <InfoBlock title="交付物" items={s.deliverables as string[]} /> : null}
+            </div>
+          )
+        })() : drawer?.type === 'evaluation' ? (() => {
+          const ev = drawer.data as Record<string, unknown>
+          return (
+            <div className="space-y-4">
+              <InfoBlock title="掌握信号" items={ev.mastery_signals as string[]} />
+              <InfoBlock title="自检问题" items={ev.self_check_questions as string[]} />
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-600">达成等级</p>
+                {(ev.rubric as Array<{ level: string; description: string }>)?.map(item => (
+                  <div key={item.level} className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-sm font-medium text-slate-800">{item.level}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })() : null}
+      </LearningDetailDrawer>
     </div>
   )
 }
 
-function InfoListCard({ title, items }: { title: string; items: string[] }) {
+/* ── Micro components ── */
+
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-800">{value}</p>
+    </div>
+  )
+}
+
+function InfoBlock({ title, items }: { title: string; items: string[] }) {
+  if (!items?.length) return null
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <div className="mt-3 space-y-2">
-        {items.map((item, index) => (
-          <div key={`${title}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-            {item}
-          </div>
+      <div className="mt-2 space-y-1.5">
+        {items.map((item, i) => (
+          <div key={i} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{item}</div>
         ))}
       </div>
     </div>

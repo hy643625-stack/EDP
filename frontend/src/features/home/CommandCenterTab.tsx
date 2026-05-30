@@ -410,6 +410,11 @@ export function CommandCenterTab({
       for (const key of prev) {
         if (rawKeys.has(key)) next.add(key)
       }
+      // Only update state if the set actually changed
+      if (next.size === prev.size) {
+        const allMatch = Array.from(next).every(k => prev.has(k))
+        if (allMatch) return prev
+      }
       return next
     })
   }, [pendingCardsRaw])
