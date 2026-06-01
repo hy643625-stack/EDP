@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlarmClock, BarChart3, Bot, ChevronDown, ListChecks, ListTodo, PencilLine, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { AlarmClock, BarChart3, Bot, ChevronDown, ListChecks, ListTodo, PencilLine, Plus, Settings2, Trash2, Trophy, X } from 'lucide-react'
 import dayjs from 'dayjs'
 
 import { api } from '@/api/client'
@@ -27,6 +27,7 @@ import { createHttpRepository } from '../../packages/data/src/httpRepository'
 import { createSqliteLocalRepository } from '../../packages/data/src/sqliteLocalRepository'
 import { Button, SegmentedTabs, type SegmentedTabItem } from '../../packages/ui/src'
 import { CommandCenterTab } from '@/features/home/CommandCenterTab'
+import { ContestTab } from '@/features/contest/ContestTab'
 import { CreateTaskModal } from '@/features/overview/CreateTaskModal'
 import { DEFAULT_TASK_COLOR } from '@/features/overview/taskColorPresets'
 import { AiSettingsModal, type AiProviderConfigDraft } from '@/features/settings/AiSettingsModal'
@@ -35,7 +36,7 @@ import { StatsTab } from '@/features/stats/StatsTab'
 import { TimeTab } from '@/features/time/TimeTab'
 import { TodosTab } from '@/features/todos/TodosTab'
 
-type TabKey = 'records' | 'todos' | 'time' | 'stats' | 'learning'
+type TabKey = 'records' | 'todos' | 'time' | 'stats' | 'learning' | 'contest'
 type TimerMode = 'countup' | 'countdown'
 
 const tabs: Array<SegmentedTabItem<TabKey>> = [
@@ -43,7 +44,8 @@ const tabs: Array<SegmentedTabItem<TabKey>> = [
   { key: 'todos', label: 'Todos', icon: ListTodo },
   { key: 'time', label: 'Time', icon: AlarmClock },
   { key: 'stats', label: 'Stats', icon: BarChart3 },
-  { key: 'learning', label: 'Learning', icon: Bot }
+  { key: 'learning', label: 'Learning', icon: Bot },
+  { key: 'contest', label: 'Contest', icon: Trophy }
 ]
 
 const timerModeTabs: Array<SegmentedTabItem<TimerMode>> = [
@@ -1482,6 +1484,9 @@ function App() {
 
         {activeTab === 'learning' ? (
           <LearningStudioTab onOpenAiSettings={() => void openAiSettings()} />
+        ) : null}
+        {activeTab === 'contest' ? (
+          <ContestTab />
         ) : null}
       </main>
 

@@ -142,6 +142,24 @@ SCHEMA_STATEMENTS = [
         FOREIGN KEY (session_id) REFERENCES learning_sessions(id)
     );
     """,
+    # ── Contest module tables ────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS contest_problems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        platform TEXT NOT NULL,
+        problem_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        source_url TEXT DEFAULT '',
+        statement_markdown TEXT DEFAULT '',
+        tags TEXT DEFAULT '[]',
+        difficulty INTEGER DEFAULT 0,
+        educational_value TEXT DEFAULT '',
+        prerequisites TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(platform, problem_id)
+    );
+    """,
 ]
 
 DEFAULT_ATTRS = [
@@ -177,6 +195,50 @@ class Database:
             for statement in SCHEMA_STATEMENTS:
                 conn.execute(statement)
             self._seed_defaults(conn)
+
+    # ── Contest problem helpers ─────────────────────────
+
+    def upsert_contest_problem(self, platform: str, problem_id: str, title: str,
+                                source_url: str = "", statement_markdown: str = "",
+                                tags: str = "[]", difficulty: int = 0,
+                                educational_value: str = "", prerequisites: str = "[]",
+                                created_at: str = "", updated_at: str = "") -> dict:
+        with self.session() as conn:
+            conn.execute(
+                """
+                INSERT INTO contest_problems (platform, problem_id, title, source_url,
+                    statement_markdown, tags, difficulty, educational_value, prerequisites,
+                    created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform, problem_id) DO UPDATE SET
+                    title=excluded.title, source_url=excluded.source_url,
+                    statement_markdown=excluded.statement_markdown, tags=excluded.tags,
+                    difficulty=excluded.difficulty, educational_value=excluded.educational_value,
+                    prerequisites=excluded.prerequisites, updated_at=excluded.updated_at
+                """,
+                (platform, problem_id, title, source_url, statement_markdown,
+                 tags, difficulty, educational_value, prerequisites, created_at, updated_at),
+            )
+            row = conn.execute(
+                "SELECT * FROM contest_problems WHERE platform = ? AND problem_id = ?",
+                (platform, problem_id),
+            ).fetchone()
+            return dict(row) if row else {}
+
+    def get_contest_problem(self, platform: str, problem_id: str) -> dict | None:
+        with self.session() as conn:
+            row = conn.execute(
+                "SELECT * FROM contest_problems WHERE platform = ? AND problem_id = ?",
+                (platform, problem_id),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def list_contest_problems(self) -> list[dict]:
+        with self.session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM contest_problems ORDER BY updated_at DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def _seed_defaults(self, conn: sqlite3.Connection) -> None:
         conn.execute(

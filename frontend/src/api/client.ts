@@ -337,4 +337,12 @@ export const api = {
   // Phase 3: Tutor
   tutorLearningSession: (sessionId: string, question: string) =>
     unwrap<LearningTutorResponse>(() => http.post(`/v1/learning/sessions/${sessionId}/tutor`, { question })),
+
+  // Phase 6: Contest
+  postContestFetchProblem: (url: string, handle?: string) =>
+    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/problems/fetch', { url, handle: handle || '' })),
+  postContestFetchCfSubmissions: (handle: string) =>
+    unwrap<Record<string, unknown>[]>(() => http.post('/v1/contest/submissions/fetch-cf', { handle })),
+  postContestDiagnose: (payload: Record<string, unknown>) =>
+    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/diagnose', payload)),
 }
