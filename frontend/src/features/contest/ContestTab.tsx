@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/api/client'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../../packages/ui/src'
-import { CheckCircle2, ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Search, Send, Tag, Trophy, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Search, Send, Tag, Terminal, Trophy, XCircle } from 'lucide-react'
 
 interface CfSubmission {
   platform: string
@@ -33,6 +33,14 @@ export function ContestTab() {
   const [error, setError] = useState('')
   const [showCodePanel, setShowCodePanel] = useState(false)
   const [selectedSubIdx, setSelectedSubIdx] = useState(-1)
+  const [compilerInfo, setCompilerInfo] = useState<Record<string, unknown> | null>(null)
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:18765/v1/contest/compilers')
+      .then(r => r.json())
+      .then(d => { if (d.data) setCompilerInfo(d.data as Record<string, unknown>) })
+      .catch(() => {})
+  }, [])
 
   async function handleFetchProblem() {
     if (!url.trim()) return
@@ -264,6 +272,25 @@ export function ContestTab() {
                     <textarea className="input-clean min-h-[180px] w-full resize-y font-mono text-sm"
                       value={code} onChange={e => setCode(e.target.value)}
                       placeholder="粘贴你的 C++ 代码..." />
+
+                    {/* Compiler status */}
+                    {(() => {
+                      const active = (compilerInfo?.active || {}) as Record<string, string>
+                      const compilers = (compilerInfo?.compilers || []) as Array<Record<string, string>>
+                      return (
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                          <Terminal className="h-3 w-3" />
+                          {compilerInfo?.has_compiler && active.version ? (
+                            <span>编译器: <span className="text-slate-600">{active.version.split(' ').slice(0, 3).join(' ')}</span></span>
+                          ) : compilerInfo?.has_compiler ? (
+                            <span>编译器: <span className="text-emerald-600">已检测到 {compilers[0]?.name || ''}</span></span>
+                          ) : (
+                            <span className="text-rose-500">未检测到 C++ 编译器，样例运行和对拍不可用</span>
+                          )}
+                          <span className="text-slate-300">| 可通过环境变量 EDP_CXX_COMPILER 手动指定路径</span>
+                        </div>
+                      )
+                    })()}
 
                     <div className="flex gap-2">
                       <Button iconLeft={<Play className="h-4 w-4" />} onClick={() => void handleDiagnose(false)}

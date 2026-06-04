@@ -162,3 +162,19 @@ def diagnose_wa(payload: dict, request: Request):
     diagnosis = service.diagnose_wa(problem, submission, deep=deep)
 
     return success({"diagnosis": diagnosis})
+
+
+# ── Compiler discovery ────────────────────────────────
+
+
+@router.get("/compilers")
+def list_compilers():
+    """List available C++ compilers on this machine."""
+    from app.contest.runner import discover_compilers, get_compiler_info
+    compilers = discover_compilers()
+    current = get_compiler_info()
+    return success({
+        "compilers": compilers,
+        "active": current,
+        "has_compiler": len(compilers) > 0,
+    })

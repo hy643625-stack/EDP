@@ -62,17 +62,131 @@ def _norm(s: str) -> str:
     return "\n".join(line.strip() for line in s.strip().splitlines())
 
 
-def _find_gpp() -> str | None:
-    """Find a working C++ compiler."""
-    for name in ("g++", "g++-14", "g++-13", "g++-12", "clang++"):
-        if shutil.which(name):
-            return name
+# ── compiler discovery ─────────────────────────────────
+
+
+# Standard search paths for common C++ compilers on macOS and Linux
+_DEFAULT_COMPILER_CANDIDATES = [
+    "g++", "g++-14", "g++-13", "g++-12", "g++-11",
+    "clang++", "clang++-17", "clang++-16",
+    # macOS Homebrew
+    "/opt/homebrew/bin/g++-14", "/opt/homebrew/bin/g++-13",
+    "/opt/homebrew/bin/g++", "/opt/homebrew/opt/gcc/bin/g++-14",
+    # Intel Mac Homebrew
+    "/usr/local/bin/g++-14", "/usr/local/bin/g++-13", "/usr/local/bin/g++",
+    # Linux
+    "/usr/bin/g++", "/usr/bin/clang++",
+]
+
+_HELLO_WORLD = b"#include <iostream>\nint main() { std::cout << \"ok\" << std::endl; return 0; }\n"
+
+_cached_compiler: str | None = None
+_cached_compiler_version: str = ""
+
+
+def discover_compilers() -> list[dict[str, str]]:
+    """Find all available C++ compilers and their versions. Returns list sorted by preference."""
+    found: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for candidate in _DEFAULT_COMPILER_CANDIDATES:
+        path = shutil.which(candidate)
+        if path is None:
+            # Try absolute path directly
+            if candidate.startswith("/") and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                path = candidate
+            else:
+                continue
+        if path in seen:
+            continue
+        seen.add(path)
+
+        version = _try_get_version(path)
+        if version:
+            found.append({"path": path, "version": version, "name": os.path.basename(path)})
+
+    # Sort: prefer g++ over clang++, newer versions first
+    def _sort_key(p: dict[str, str]) -> tuple[int, str]:
+        name = p["name"]
+        # g++ variants first
+        is_gpp = 0 if "g++" in name else 1
+        return (is_gpp, p["version"])
+
+    found.sort(key=_sort_key)
+    return found
+
+
+def get_compiler() -> str | None:
+    """Get a working compiler. Caches result after first discovery."""
+    global _cached_compiler, _cached_compiler_version
+
+    # Check env override first
+    env_override = os.environ.get("EDP_CXX_COMPILER", "").strip()
+    if env_override:
+        if os.path.isfile(env_override) or shutil.which(env_override):
+            version = _try_get_version(env_override)
+            if version:
+                _cached_compiler = env_override
+                _cached_compiler_version = version
+                return env_override
+
+    # Use cached
+    if _cached_compiler is not None:
+        return _cached_compiler
+
+    # Discover
+    compilers = discover_compilers()
+    if compilers:
+        _cached_compiler = compilers[0]["path"]
+        _cached_compiler_version = compilers[0]["version"]
+        return _cached_compiler
+
     return None
+
+
+def get_compiler_info() -> dict[str, str]:
+    """Return current compiler info."""
+    return {
+        "path": _cached_compiler or "",
+        "version": _cached_compiler_version or "",
+    }
+
+
+def _try_get_version(path: str) -> str:
+    """Try to get compiler version string."""
+    try:
+        # First, verify it can actually compile
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "test.cpp")
+            out = os.path.join(tmp, "test")
+            with open(src, "wb") as f:
+                f.write(_HELLO_WORLD)
+            proc = subprocess.run(
+                [path, "-std=c++17", "-O0", src, "-o", out],
+                capture_output=True, timeout=10,
+            )
+            if proc.returncode != 0:
+                return ""
+
+        # Then get version
+        proc = subprocess.run([path, "--version"], capture_output=True, timeout=5)
+        first_line = proc.stdout.decode("utf-8", errors="replace").split("\n")[0].strip()
+        # Also try stderr (g++ --version sometimes writes to stderr)
+        if not first_line:
+            first_line = proc.stderr.decode("utf-8", errors="replace").split("\n")[0].strip()
+        return first_line[:100] if first_line else ""
+    except Exception:
+        return ""
+
+
+def _find_gpp() -> str | None:
+    """Find a working C++ compiler (deprecated, use get_compiler())."""
+    return get_compiler()
 
 
 def compile_cpp(code: str, binary_name: str = "sol") -> CompileResult:
     """Compile C++ code to a binary in a temp directory."""
-    gpp = _find_gpp()
+    gpp = get_compiler()
     if gpp is None:
         return CompileResult(ok=False, error="未找到 C++ 编译器（g++ 或 clang++），请安装 Xcode CLI Tools。")
 
