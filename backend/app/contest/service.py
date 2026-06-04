@@ -48,7 +48,8 @@ class ContestService:
         base_url = str(config.get("base_url", "")).rstrip("/")
         model = str(config.get("model_name", ""))
         api_key = str(config.get("api_key", ""))
-        timeout = int(config.get("timeout_seconds", 30))
+        # Use a generous timeout; SSE keeps the connection alive via heartbeats
+        timeout = max(int(config.get("timeout_seconds", 30)), 300)
 
         if not base_url or not model:
             _logger.warning("LLM call skipped: missing base_url or model_name")
