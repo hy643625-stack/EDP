@@ -42,6 +42,7 @@ class ContestService:
     def _call_llm(self, system_prompt: str, user_prompt: str, max_tokens: int = 800) -> str | None:
         config = self._get_llm_config()
         if config is None:
+            _logger.info("LLM call skipped: no config")
             return None
 
         base_url = str(config.get("base_url", "")).rstrip("/")
@@ -50,6 +51,7 @@ class ContestService:
         timeout = int(config.get("timeout_seconds", 30))
 
         if not base_url or not model:
+            _logger.warning("LLM call skipped: missing base_url or model_name")
             return None
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -75,8 +77,17 @@ class ContestService:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-            return data["choices"][0]["message"]["content"]
-        except Exception:
+            content = data["choices"][0]["message"]["content"]
+            _logger.info("LLM response received: %d chars", len(content))
+            return content
+        except httpx.TimeoutException:
+            _logger.error("LLM call timed out after %ds to %s", timeout, base_url)
+            return None
+        except httpx.HTTPStatusError as e:
+            _logger.error("LLM HTTP %d: %s", e.response.status_code, e.response.text[:300])
+            return None
+        except Exception as e:
+            _logger.error("LLM call failed: %s", e)
             return None
 
     # ── Problem fetching ──────────────────────────────
@@ -453,30 +464,35 @@ class ContestService:
 
     @staticmethod
     def _parse_json_safe(text: str) -> Any | None:
-        """Extract JSON from LLM response, handling markdown code blocks and nested objects."""
+        """Extract JSON from LLM response using brace counting (handles arbitrary nesting)."""
         cleaned = text.strip()
-        # Remove markdown code fences
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```\w*\n?", "", cleaned)
-            cleaned = re.sub(r"\n?```$", "", cleaned)
+        # Remove markdown code fences (with or without surrounding text)
+        fence_m = re.search(r"```(?:\w+)?\s*\n(.*?)\n```", cleaned, re.DOTALL)
+        if fence_m:
+            cleaned = fence_m.group(1).strip()
+
+        # Try direct parse first
         try:
             return json.loads(cleaned)
         except (json.JSONDecodeError, TypeError):
             pass
-        # Try to extract JSON object with nesting support
-        m = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group())
-            except (json.JSONDecodeError, TypeError):
-                pass
-        # Try to extract JSON array with nesting support
-        m = re.search(r"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]", cleaned, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group())
-            except (json.JSONDecodeError, TypeError):
-                pass
+
+        # Extract outermost JSON object or array by counting brackets
+        for open_char, close_char in (("{", "}"), ("[", "]")):
+            start = cleaned.find(open_char)
+            if start < 0:
+                continue
+            depth = 0
+            for i in range(start, len(cleaned)):
+                if cleaned[i] == open_char:
+                    depth += 1
+                elif cleaned[i] == close_char:
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(cleaned[start:i + 1])
+                        except (json.JSONDecodeError, TypeError):
+                            break
         return None
 
     def _rule_based_check(
