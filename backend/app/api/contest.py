@@ -53,6 +53,9 @@ def fetch_problem(payload: dict, request: Request):
     educational_value = review.get("educational_value", "")
     prerequisites = review.get("prerequisites", [])
 
+    # Check if AI is configured
+    ai_available = service._get_llm_config() is not None
+
     # Determine problem_id for DB
     parsed = service._parse_cf_url(url)
     if parsed and "codeforces.com" in url:
@@ -92,6 +95,7 @@ def fetch_problem(payload: dict, request: Request):
             "prerequisites": prerequisites if isinstance(prerequisites, list) else json.loads(db_record.get("prerequisites", "[]")),
         },
         "ai_reviewed": review.get("ai_reviewed", False),
+        "ai_available": ai_available,
         "submissions": submissions,
     })
 

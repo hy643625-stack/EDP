@@ -25,6 +25,7 @@ export function ContestTab() {
   const [loadingDeep, setLoadingDeep] = useState(false)
   const [problem, setProblem] = useState<Record<string, unknown> | null>(null)
   const [aiReviewed, setAiReviewed] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState(true)
   const [submissions, setSubmissions] = useState<CfSubmission[]>([])
   const [code, setCode] = useState('')
   const [verdict, setVerdict] = useState('WA')
@@ -51,6 +52,7 @@ export function ContestTab() {
       if (result.error) { setError(String(result.error)); return }
       setProblem((result.problem as Record<string, unknown>) || null)
       setAiReviewed(Boolean(result.ai_reviewed))
+      setAiAvailable(result.ai_available !== false)
       setSubmissions((result.submissions as CfSubmission[]) || [])
       setCode('')
       setShowCodePanel(false)
@@ -170,6 +172,10 @@ export function ContestTab() {
                     <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
                       <Lightbulb className="h-3 w-3" />AI 已审题
                     </span>
+                  ) : aiAvailable ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                      <Lightbulb className="h-3 w-3" />未触发 AI 审题
+                    </span>
                   ) : null}
                 </div>
 
@@ -217,6 +223,20 @@ export function ContestTab() {
                     </div>
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+
+            {/* AI not configured hint */}
+            {problem && !aiAvailable ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
+                <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-amber-700">AI 验题不可用</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    尚未配置 AI 服务商，无法自动生成标签、学习价值和前置知识。
+                    请在「AI 设置」中配置后再导入题目。
+                  </p>
+                </div>
               </div>
             ) : null}
 
