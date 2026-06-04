@@ -150,14 +150,15 @@ def fetch_cf_submissions(payload: dict, request: Request):
 
 @router.post("/diagnose")
 def diagnose_wa(payload: dict, request: Request):
-    """Diagnose a WA submission — rule-based + optional LLM. No profile updates."""
+    """Diagnose a WA submission — sample execution + rule-based + LLM + optional 对拍."""
     problem_data = payload.get("problem", {})
     submission_data = payload.get("submission", {})
+    deep = bool(payload.get("deep", False))
 
     problem = ProblemSnapshot.from_dict(problem_data)
     submission = SubmissionSnapshot.from_dict(submission_data)
 
     service = _get_service(request)
-    diagnosis = service.diagnose_wa(problem, submission)
+    diagnosis = service.diagnose_wa(problem, submission, deep=deep)
 
     return success({"diagnosis": diagnosis})

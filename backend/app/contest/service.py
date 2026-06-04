@@ -271,43 +271,226 @@ class ContestService:
 
     def diagnose_wa(
         self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        deep: bool = False,
     ) -> dict[str, Any]:
-        """Analyze a WA submission — rule-based + optional LLM enhancement."""
+        """Analyze a WA submission — sample execution + rule-based + LLM + optional 对拍."""
         code = submission.code.strip()
         if not code:
             return {
                 "hypotheses": [],
+                "sample_results": [],
+                "hack_result": None,
                 "confidence": "none",
                 "note": "未提供代码。请粘贴代码或选择一条提交记录进行分析。",
             }
 
-        hypotheses: list[dict[str, str]] = []
-
         # Stage 1: Algorithm intent detection (regex)
         algo_indicators = self._detect_algorithm_intent(code)
 
-        # Stage 2: Rule-based error patterns
+        # Stage 2: Run sample tests (LOCAL execution)
+        sample_results_dicts: list[dict[str, Any]] = []
+        sample_fail = False
+        if problem.samples:
+            from app.contest.runner import run_samples as _run
+            results = _run(code, problem.samples)
+            for r in results:
+                sample_results_dicts.append({
+                    "index": r.index, "input": r.input_text[:300],
+                    "expected": r.expected[:500], "actual": r.actual[:500],
+                    "passed": r.passed, "error": r.error[:300],
+                })
+                if not r.passed:
+                    sample_fail = True
+
+        # Stage 3: Rule-based error patterns
+        hypotheses: list[dict[str, str]] = []
         hypotheses.extend(self._rule_based_check(code, problem, algo_indicators))
 
-        # Stage 3: LLM-enhanced diagnosis (if available and code is non-trivial)
-        if len(code) > 50:
-            llm_result = self._llm_diagnose(problem, submission, algo_indicators)
+        # Stage 4: LLM-enhanced diagnosis (if available)
+        llm_enhanced = False
+        llm_config = self._get_llm_config()
+        if llm_config and len(code) > 30:
+            llm_result = self._llm_diagnose(problem, submission, algo_indicators, sample_results_dicts)
             if llm_result:
-                hypotheses = llm_result  # LLM result replaces rule-based if available
+                hypotheses = llm_result
+                llm_enhanced = True
 
         if not hypotheses:
             hypotheses.append({
                 "type": "实现细节错误",
-                "hypothesis": "代码逻辑没有明显的模式错误。建议手动对拍或加随机小数据测试。",
-                "evidence": "未能从代码结构中自动识别错误模式。",
+                "hypothesis": "代码逻辑没有明显的模式错误。建议进行对拍以发现反例。",
+                "evidence": "未能从代码结构或样例运行中自动识别错误模式。",
             })
+
+        # Stage 5: Deep analysis — LLM brute + generator + 对拍
+        hack_result: dict[str, Any] | None = None
+        if deep and llm_config and len(code) > 50:
+            hack_result = self._run_hack_pipeline(problem, submission, sample_results_dicts)
 
         return {
             "hypotheses": hypotheses[:5],
             "algo_indicators": algo_indicators,
+            "sample_results": sample_results_dicts,
+            "hack_result": hack_result,
             "has_code": True,
-            "llm_enhanced": bool(self._get_llm_config()),
+            "llm_enhanced": llm_enhanced,
+            "sample_fail": sample_fail,
         }
+
+    # ── Hack / 对拍 pipeline ──────────────────────────
+
+    def _run_hack_pipeline(
+        self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        sample_results: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Let LLM write brute force + generator, run 对拍, feed results back."""
+        from app.contest.runner import run_hack as _run_hack
+
+        # Step 1: Ask LLM to generate brute force + generator
+        gen_result = self._llm_generate_hack_code(problem, submission, sample_results)
+        if gen_result is None:
+            return None
+
+        brute_code = gen_result.get("brute_code", "")
+        gen_code = gen_result.get("generator_code", "")
+        if not brute_code or not gen_code:
+            return {"ok": False, "error": "LLM 未能生成有效的暴力解或生成器代码。",
+                    "brute_code": brute_code, "generator_code": gen_code}
+
+        # Step 2: Run 对拍 locally
+        hack = _run_hack(submission.code, brute_code, gen_code, max_rounds=200)
+
+        result: dict[str, Any] = {
+            "ok": hack.ok,
+            "round_count": hack.round_count,
+            "first_fail": hack.first_fail,
+            "counterexample_input": hack.counterexample_input[:500],
+            "wa_output": hack.wa_output[:500],
+            "brute_output": hack.brute_output[:500],
+            "brute_code": brute_code,
+            "generator_code": gen_code,
+            "error": hack.error,
+        }
+
+        # Step 3: If counterexample found, ask LLM to analyze it
+        if hack.first_fail > 0 and hack.counterexample_input:
+            analysis = self._llm_analyze_counterexample(
+                problem, submission, hack.counterexample_input,
+                hack.wa_output, hack.brute_output, hack.first_fail,
+            )
+            if analysis:
+                result["counterexample_analysis"] = analysis
+
+        return result
+
+    def _llm_generate_hack_code(
+        self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        sample_results: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Ask LLM to generate brute force solution and data generator."""
+
+        sample_info = ""
+        for s in sample_results:
+            sample_info += f"\n样例{s['index']}: 输入={s['input'][:200]} 期望={s['expected'][:200]} {'通过' if s['passed'] else '失败'}"
+
+        prompt = f"""根据题目信息，生成两个 C++ 程序：
+
+**题目**：{problem.title}
+**标签**：{', '.join(problem.tags or [])}
+**题面摘要**：{problem.statement_markdown[:1500]}
+**用户 WA 代码**（仅参考算法结构，不要抄袭错误）：
+```
+{submission.code[:2500]}
+```
+**样例测试结果**：{sample_info if sample_info else '无样例数据'}
+
+请生成两个完整的 C++ 程序，用如下 JSON 格式返回（必须严格 JSON）：
+{{
+  "brute_code": "完整的暴力解 C++ 代码",
+  "generator_code": "完整的数据生成器 C++ 代码"
+}}
+
+要求：
+1. brute_code: 写一个保证正确但可以低效的暴力解（O(2^N), O(N!) 都可以），严格按题目输入格式读取、输出格式写入。自带 main 函数，从 stdin 读、向 stdout 写。
+2. generator_code: 写一个数据生成器，生成符合题目约束的小规模随机测试数据，自带 main 函数，向 stdout 输出测试数据（格式与题目输入一致）。
+3. 两个程序都必须是完整可编译的 C++ 代码，不要省略头文件，不要用外部库。
+4. 只返回 JSON，不要 markdown 代码块。JSON 字符串中的换行用 \\n 转义。"""
+
+        system = "你是一位 C++ 竞赛编程专家。只返回严格的 JSON，字符串中的代码用 \\n 转义。"
+        result = self._call_llm(system, prompt)
+        if result is None:
+            return None
+
+        return self._parse_json_safe(result)
+
+    def _llm_analyze_counterexample(
+        self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        counterexample_input: str, wa_output: str, brute_output: str, fail_round: int,
+    ) -> list[dict[str, str]] | None:
+        """Feed counterexample back to LLM for root cause analysis."""
+        prompt = f"""找到了一组反例，请分析 WA 代码的具体错误：
+
+**题目**：{problem.title}
+**反例输入**（第 {fail_round} 轮对拍）：
+```
+{counterexample_input[:500]}
+```
+**WA 输出**：
+```
+{wa_output[:500]}
+```
+**正确输出（暴力解）**：
+```
+{brute_output[:500]}
+```
+**WA 代码**：
+```
+{submission.code[:2500]}
+```
+
+请用 JSON 数组格式返回具体的错误分析（1-2 条）：
+[
+  {{"type": "具体错误类型", "hypothesis": "基于反例的精确定位", "evidence": "反例证据 + 代码问题行"}}
+]
+
+只返回 JSON 数组。"""
+
+        system = "你是一位算法竞赛教练，擅长基于反例定位代码错误。只返回 JSON 数组。"
+        result = self._call_llm(system, prompt)
+        if result is None:
+            return None
+
+        parsed = self._parse_json_safe(result)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            return parsed
+        return None
+
+    @staticmethod
+    def _parse_json_safe(text: str) -> Any | None:
+        """Extract JSON from LLM response, handling markdown code blocks."""
+        cleaned = text.strip()
+        # Remove markdown code fences
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```\w*\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, TypeError):
+            # Try to extract JSON object
+            m = re.search(r"\{[^{}]*\}", cleaned, re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group())
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            # Try to extract JSON array
+            m = re.search(r"\[[^\[\]]*\]", cleaned, re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group())
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return None
 
     def _rule_based_check(
         self, code: str, problem: ProblemSnapshot, algo: dict[str, bool],
@@ -342,6 +525,7 @@ class ContestService:
 
     def _llm_diagnose(
         self, problem: ProblemSnapshot, submission: SubmissionSnapshot, algo: dict[str, bool],
+        sample_results: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, str]] | None:
         """LLM-enhanced WA diagnosis."""
         config = self._get_llm_config()
@@ -349,6 +533,15 @@ class ContestService:
             return None
 
         detected_algos = [k for k, v in algo.items() if v]
+
+        sample_info = ""
+        if sample_results:
+            for s in sample_results:
+                status = "✓" if s["passed"] else "✗"
+                sample_info += f"\n样例{s['index']} [{status}]: 输入={s['input'][:150]} 期望={s['expected'][:150]} 实际={s['actual'][:150]}"
+                if s.get("error"):
+                    sample_info += f" 错误={s['error'][:100]}"
+
         prompt = f"""分析以下 WA 提交：
 
 题目：{problem.title}
@@ -356,6 +549,7 @@ class ContestService:
 检测到的算法模式：{', '.join(detected_algos) or '未检测到明显模式'}
 判定结果：{submission.verdict}
 语言：{submission.language}
+样例测试结果：{sample_info or '无样例数据'}
 
 代码：
 ```
@@ -367,7 +561,7 @@ class ContestService:
   {{"type": "错误类型", "hypothesis": "具体假设", "evidence": "代码中的证据"}}
 ]
 
-只返回 JSON 数组，不要其他文字。"""
+结合样例测试结果进行分析。只返回 JSON 数组，不要其他文字。"""
 
         system = "你是一位算法竞赛教练，擅长分析代码中的 WA 错误。只返回 JSON 数组。"
 

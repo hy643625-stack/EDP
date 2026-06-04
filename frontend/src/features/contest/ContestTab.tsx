@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '@/api/client'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../../packages/ui/src'
-import { ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Send, Tag, Trophy } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Search, Send, Tag, Trophy, XCircle } from 'lucide-react'
 
 interface CfSubmission {
   platform: string
@@ -22,6 +22,7 @@ export function ContestTab() {
   const [handle, setHandle] = useState('')
   const [loadingFetch, setLoadingFetch] = useState(false)
   const [loadingDiagnose, setLoadingDiagnose] = useState(false)
+  const [loadingDeep, setLoadingDeep] = useState(false)
   const [problem, setProblem] = useState<Record<string, unknown> | null>(null)
   const [aiReviewed, setAiReviewed] = useState(false)
   const [submissions, setSubmissions] = useState<CfSubmission[]>([])
@@ -49,23 +50,28 @@ export function ContestTab() {
     finally { setLoadingFetch(false) }
   }
 
-  async function handleDiagnose() {
+  async function handleDiagnose(deep = false) {
     if (!problem || !code.trim()) { setError('请先导入题目并输入或选择代码'); return }
-    setLoadingDiagnose(true); setError('')
+    if (deep) { setLoadingDeep(true) } else { setLoadingDiagnose(true) }
+    setError('')
     try {
       const result = await api.postContestDiagnose({
-        problem: { platform: problem.platform, source_url: problem.source_url, title: problem.title, tags: problem.tags },
+        problem: {
+          platform: problem.platform, source_url: problem.source_url, title: problem.title,
+          tags: problem.tags, samples: problem.samples, statement_markdown: problem.statement_markdown,
+        },
         submission: { platform: problem.platform || 'codeforces', problem_id: problem.problem_id || '', verdict, language, code },
+        deep,
       })
       setDiagnosis((result.diagnosis as Record<string, unknown>) || null)
     } catch (e) { setError(String(e)) }
-    finally { setLoadingDiagnose(false) }
+    finally {
+      if (deep) { setLoadingDeep(false) } else { setLoadingDiagnose(false) }
+    }
   }
 
   function handleSelectSubmission(idx: number) {
     setSelectedSubIdx(idx)
-    // CF user.status doesn't include code, so we can only show verdict info
-    // The user still needs to paste code manually
   }
 
   function formatTimestamp(ts: string | number) {
@@ -98,6 +104,10 @@ export function ContestTab() {
   const educationalValue = (problem?.educational_value as string) || ''
   const hypotheses = ((diagnosis as Record<string, unknown>)?.hypotheses as Array<{ type: string; hypothesis: string; evidence: string }>) || []
   const llmEnhanced = (diagnosis as Record<string, unknown>)?.llm_enhanced as boolean
+  const sampleResults = ((diagnosis as Record<string, unknown>)?.sample_results as Array<Record<string, unknown>>) || []
+  const sampleFail = (diagnosis as Record<string, unknown>)?.sample_fail as boolean
+  const hackResult = (diagnosis as Record<string, unknown>)?.hack_result as Record<string, unknown> | null
+  const hackAnalysis = (hackResult?.counterexample_analysis as Array<{ type: string; hypothesis: string; evidence: string }>) || []
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -106,12 +116,11 @@ export function ContestTab() {
           <CardTitle className="inline-flex items-center gap-2 text-base">
             <Trophy className="h-4 w-4 text-amber-500" />竞赛训练 Agent
           </CardTitle>
-          <p className="mt-1 text-sm text-slate-500">导入题目 → AI 验题入库 → 查看提交记录 → 代码诊断</p>
+          <p className="mt-1 text-sm text-slate-500">导入题目 → AI 验题入库 → 代码诊断（样例运行 + LLM + 对拍）</p>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-2">
           {/* Left: Import + Problem info */}
           <div className="space-y-3">
-            {/* URL input */}
             <label className="space-y-1">
               <span className="text-xs font-medium text-slate-600">题目链接</span>
               <div className="flex gap-2">
@@ -121,9 +130,8 @@ export function ContestTab() {
               </div>
             </label>
 
-            {/* Handle input */}
             <label className="space-y-1">
-              <span className="text-xs font-medium text-slate-600">Codeforces Handle（可选，用于拉取提交记录）</span>
+              <span className="text-xs font-medium text-slate-600">Codeforces Handle（可选）</span>
               <div className="flex gap-2">
                 <input className="input-clean flex-1" value={handle} onChange={e => setHandle(e.target.value)}
                   placeholder="例如 tourist"
@@ -157,7 +165,6 @@ export function ContestTab() {
                   ) : null}
                 </div>
 
-                {/* Tags */}
                 {tags.length > 0 ? (
                   <div>
                     <div className="flex items-center gap-1 mb-1.5">
@@ -172,7 +179,6 @@ export function ContestTab() {
                   </div>
                 ) : null}
 
-                {/* Educational value */}
                 {educationalValue ? (
                   <div className="rounded-lg bg-violet-50 border border-violet-100 p-2.5">
                     <span className="text-[10px] font-medium text-violet-600">学习价值</span>
@@ -180,7 +186,6 @@ export function ContestTab() {
                   </div>
                 ) : null}
 
-                {/* Prerequisites */}
                 {prerequisites.length > 0 ? (
                   <div>
                     <span className="text-[11px] text-slate-500">前置知识</span>
@@ -192,18 +197,14 @@ export function ContestTab() {
                   </div>
                 ) : null}
 
-                {/* Submissions summary */}
                 {submissions.length > 0 ? (
                   <div className="rounded-lg bg-white border border-slate-200 p-2.5">
                     <span className="text-[11px] font-medium text-slate-600">
                       提交记录 ({submissions.length} 条)
-                      {handle ? <span className="text-slate-400"> — {handle}</span> : null}
                     </span>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {submissions.slice(0, 6).map((s, i) => (
-                        <span key={i} className={s.verdict === 'OK' ? 'text-emerald-500' : 'text-rose-500'}>
-                          {verdictBadge(s.verdict)}
-                        </span>
+                        <span key={i}>{verdictBadge(s.verdict)}</span>
                       ))}
                     </div>
                   </div>
@@ -219,16 +220,15 @@ export function ContestTab() {
                   onClick={() => setShowCodePanel(!showCodePanel)}
                 >
                   <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <Play className="h-4 w-4 text-amber-500" />代码分析（可选）
+                    <Play className="h-4 w-4 text-amber-500" />代码分析
                   </span>
                   {showCodePanel ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 </button>
                 {showCodePanel ? (
                   <div className="border-t border-slate-200 p-3 space-y-3">
-                    {/* Submission selector */}
                     {submissions.length > 0 ? (
                       <div className="space-y-1">
-                        <span className="text-[11px] text-slate-500">选择提交记录（仅可查看判定结果，代码需手动粘贴）</span>
+                        <span className="text-[11px] text-slate-500">选择提交记录（代码需手动粘贴）</span>
                         <div className="max-h-32 overflow-y-auto space-y-1">
                           {submissions.map((s, i) => (
                             <button
@@ -252,7 +252,6 @@ export function ContestTab() {
                       </p>
                     )}
 
-                    {/* Verdict & language */}
                     <div className="flex gap-2 flex-wrap">
                       <select className="input-clean w-auto text-xs" value={language} onChange={e => setLanguage(e.target.value)}>
                         <option>C++</option><option>Python</option><option>Java</option>
@@ -262,14 +261,20 @@ export function ContestTab() {
                       </select>
                     </div>
 
-                    {/* Code textarea */}
                     <textarea className="input-clean min-h-[180px] w-full resize-y font-mono text-sm"
                       value={code} onChange={e => setCode(e.target.value)}
-                      placeholder="粘贴你的代码..." />
+                      placeholder="粘贴你的 C++ 代码..." />
 
-                    <Button iconLeft={<Play className="h-4 w-4" />} onClick={() => void handleDiagnose()} disabled={loadingDiagnose || !code.trim()}>
-                      {loadingDiagnose ? '诊断中...' : 'WA 诊断'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button iconLeft={<Play className="h-4 w-4" />} onClick={() => void handleDiagnose(false)}
+                        disabled={loadingDiagnose || loadingDeep || !code.trim()}>
+                        {loadingDiagnose ? '诊断中...' : '快速诊断'}
+                      </Button>
+                      <Button iconLeft={<Search className="h-4 w-4" />} onClick={() => void handleDiagnose(true)}
+                        disabled={loadingDiagnose || loadingDeep || !code.trim()}>
+                        {loadingDeep ? '对拍中...' : '深度诊断（对拍）'}
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -279,32 +284,126 @@ export function ContestTab() {
           {/* Right: Results */}
           <div className="space-y-3">
             {diagnosis ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-amber-700">
-                    错误假设 ({hypotheses.length} 条)
-                  </p>
-                  {llmEnhanced ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
-                      <Lightbulb className="h-3 w-3" />AI 增强
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-400">规则诊断</span>
-                  )}
-                </div>
-                {hypotheses.map((h, i) => (
-                  <div key={i} className="mt-2 rounded-lg bg-white border border-amber-200 p-3">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{h.type}</span>
-                    <p className="mt-1 text-sm text-slate-700">{h.hypothesis}</p>
-                    <p className="mt-1 text-xs text-slate-400">{h.evidence}</p>
+              <>
+                {/* Sample test results */}
+                {sampleResults.length > 0 ? (
+                  <div className={`rounded-xl border p-4 ${sampleFail ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                    <p className={`text-xs font-semibold ${sampleFail ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      样例测试 ({sampleResults.filter((s: Record<string, unknown>) => s.passed).length}/{sampleResults.length} 通过)
+                    </p>
+                    {sampleResults.map((s: Record<string, unknown>) => (
+                      <div key={String(s.index)} className={`mt-1.5 rounded-lg border p-2.5 text-xs ${
+                        s.passed ? 'border-emerald-150 bg-white' : 'border-rose-150 bg-white'
+                      }`}>
+                        <div className="flex items-center gap-1.5">
+                          {s.passed
+                            ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            : <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                          }
+                          <span className="font-medium text-slate-600">样例 {String(s.index)}</span>
+                        </div>
+                        <div className="mt-1 grid grid-cols-3 gap-2 text-[10px]">
+                          <div><span className="text-slate-400">输入</span><pre className="mt-0.5 text-slate-700 whitespace-pre-wrap">{String(s.input || '')}</pre></div>
+                          <div><span className="text-slate-400">期望</span><pre className="mt-0.5 text-slate-700 whitespace-pre-wrap">{String(s.expected || '')}</pre></div>
+                          <div><span className={s.passed ? 'text-emerald-500' : 'text-rose-500'}>实际</span><pre className={`mt-0.5 whitespace-pre-wrap ${s.passed ? 'text-emerald-700' : 'text-rose-700'}`}>{String(s.actual || (s.error || ''))}</pre></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                ) : null}
+
+                {/* Error hypotheses */}
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-amber-700">错误假设 ({hypotheses.length} 条)</p>
+                    {llmEnhanced ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                        <Lightbulb className="h-3 w-3" />AI 增强
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">规则诊断</span>
+                    )}
+                  </div>
+                  {hypotheses.map((h, i) => (
+                    <div key={i} className="mt-2 rounded-lg bg-white border border-amber-200 p-3">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{h.type}</span>
+                      <p className="mt-1 text-sm text-slate-700">{h.hypothesis}</p>
+                      <p className="mt-1 text-xs text-slate-400">{h.evidence}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Hack / 对拍 results */}
+                {hackResult ? (
+                  <div className={`rounded-xl border p-4 ${hackResult.first_fail && Number(hackResult.first_fail) > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <p className="text-xs font-semibold text-slate-700">
+                      深度对拍 ({String(hackResult.round_count)} 轮)
+                    </p>
+
+                    {hackResult.error ? (
+                      <p className="mt-1 text-xs text-rose-600">{String(hackResult.error)}</p>
+                    ) : null}
+
+                    {hackResult.first_fail && Number(hackResult.first_fail) > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        <div className="rounded-lg bg-white border border-rose-200 p-3 text-xs">
+                          <span className="font-medium text-rose-600">第 {String(hackResult.first_fail)} 轮发现反例</span>
+                          <pre className="mt-1.5 text-slate-700 whitespace-pre-wrap bg-slate-50 p-2 rounded max-h-24 overflow-y-auto">{String(hackResult.counterexample_input || '')}</pre>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-lg bg-white border border-rose-150 p-2.5">
+                            <span className="font-medium text-rose-600">WA 输出</span>
+                            <pre className="mt-1 text-rose-700 whitespace-pre-wrap">{String(hackResult.wa_output || '')}</pre>
+                          </div>
+                          <div className="rounded-lg bg-white border border-emerald-150 p-2.5">
+                            <span className="font-medium text-emerald-600">正确输出</span>
+                            <pre className="mt-1 text-emerald-700 whitespace-pre-wrap">{String(hackResult.brute_output || '')}</pre>
+                          </div>
+                        </div>
+
+                        {/* LLM analysis of counterexample */}
+                        {hackAnalysis.length > 0 ? (
+                          <div className="rounded-lg bg-violet-50 border border-violet-200 p-3">
+                            <span className="text-[10px] font-medium text-violet-600">AI 反例分析</span>
+                            {hackAnalysis.map((a: { type: string; hypothesis: string; evidence: string }, i: number) => (
+                              <div key={i} className="mt-2 rounded bg-white border border-violet-150 p-2.5">
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700">{a.type}</span>
+                                <p className="mt-1 text-xs text-slate-700">{a.hypothesis}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-400">{a.evidence}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {/* Brute + generator code previews */}
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-slate-500 hover:text-slate-700">查看暴力解 & 生成器代码</summary>
+                          <div className="mt-2 space-y-2">
+                            <div>
+                              <span className="font-medium text-slate-500">暴力解 (brute.cpp)</span>
+                              <pre className="mt-1 text-[10px] text-slate-600 bg-slate-100 p-2 rounded max-h-40 overflow-y-auto">{String(hackResult.brute_code || '')}</pre>
+                            </div>
+                            <div>
+                              <span className="font-medium text-slate-500">数据生成器 (gen.cpp)</span>
+                              <pre className="mt-1 text-[10px] text-slate-600 bg-slate-100 p-2 rounded max-h-40 overflow-y-auto">{String(hackResult.generator_code || '')}</pre>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    ) : (
+                      hackResult.ok && !hackResult.error ? (
+                        <p className="mt-1 text-xs text-slate-500">对拍 {String(hackResult.round_count)} 轮未发现反例，代码可能在小数据范围内正确。建议扩大测试规模或检查 I/O 格式。</p>
+                      ) : null
+                    )}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
                 <Code2 className="h-8 w-8 mx-auto text-slate-300" />
-                <p className="mt-3 text-sm text-slate-400">导入题目后，展开代码分析面板，</p>
-                <p className="text-sm text-slate-400">粘贴代码并点击 WA 诊断查看结果</p>
+                <p className="mt-3 text-sm text-slate-400">导入题目后，展开代码分析面板</p>
+                <p className="text-sm text-slate-400">粘贴代码并点击诊断按钮</p>
               </div>
             )}
           </div>
