@@ -334,6 +334,74 @@ class ContestService:
             "sample_fail": sample_fail,
         }
 
+    def diagnose_wa_stream(
+        self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        emit: Any, deep: bool = False,
+    ) -> dict[str, Any]:
+        """Streaming version: same logic but calls emit(event, data) at each stage."""
+        code = submission.code.strip()
+        if not code:
+            emit("done", {"hypotheses": [], "sample_results": [], "hack_result": None,
+                  "note": "未提供代码。"})
+            return {}
+
+        algo_indicators = self._detect_algorithm_intent(code)
+
+        # Stage 1: Sample execution
+        emit("sample_start", {"message": "正在编译并运行样例..."})
+        sample_results_dicts: list[dict[str, Any]] = []
+        sample_fail = False
+        if problem.samples:
+            from app.contest.runner import run_samples as _run
+            results = _run(code, problem.samples)
+            for r in results:
+                d = {"index": r.index, "input": r.input_text[:300],
+                     "expected": r.expected[:500], "actual": r.actual[:500],
+                     "passed": r.passed, "error": r.error[:300]}
+                sample_results_dicts.append(d)
+                emit("sample_result", d)
+                if not r.passed:
+                    sample_fail = True
+
+        # Stage 2: Rule-based
+        hypotheses: list[dict[str, str]] = []
+        hypotheses.extend(self._rule_based_check(code, problem, algo_indicators))
+
+        # Stage 3: LLM diagnosis
+        llm_enhanced = False
+        llm_config = self._get_llm_config()
+        if llm_config and len(code) > 30:
+            emit("llm_diagnose", {"message": "AI 正在分析代码..."})
+            llm_result = self._llm_diagnose(problem, submission, algo_indicators, sample_results_dicts)
+            if llm_result:
+                hypotheses = llm_result
+                llm_enhanced = True
+                emit("llm_diagnose_done", {"hypotheses": llm_result})
+
+        if not hypotheses:
+            hypotheses.append({
+                "type": "实现细节错误",
+                "hypothesis": "代码逻辑没有明显的模式错误。建议进行对拍以发现反例。",
+                "evidence": "未能从代码结构中自动识别错误模式。",
+            })
+
+        # Stage 4: Deep hack
+        hack_result: dict[str, Any] | None = None
+        if deep and llm_config and len(code) > 50:
+            hack_result = self._run_hack_pipeline_stream(problem, submission, sample_results_dicts, emit)
+
+        result = {
+            "hypotheses": hypotheses[:5],
+            "algo_indicators": algo_indicators,
+            "sample_results": sample_results_dicts,
+            "hack_result": hack_result,
+            "has_code": True,
+            "llm_enhanced": llm_enhanced,
+            "sample_fail": sample_fail,
+        }
+        emit("done", result)
+        return result
+
     # ── Hack / 对拍 pipeline ──────────────────────────
 
     def _run_hack_pipeline(
@@ -341,21 +409,41 @@ class ContestService:
         sample_results: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
         """Let LLM write brute force + generator, run 对拍, feed results back."""
+        return self._run_hack_pipeline_stream(problem, submission, sample_results, emit=None)
+
+    def _run_hack_pipeline_stream(
+        self, problem: ProblemSnapshot, submission: SubmissionSnapshot,
+        sample_results: list[dict[str, Any]], emit: Any,
+    ) -> dict[str, Any] | None:
+        """Streaming version: emit progress events at each stage."""
         from app.contest.runner import run_hack as _run_hack
 
-        # Step 1: Ask LLM to generate brute force + generator
+        if emit:
+            emit("hack_generate", {"message": "AI 正在生成暴力解和生成器..."})
+
         gen_result = self._llm_generate_hack_code(problem, submission, sample_results)
         if gen_result is None:
+            if emit:
+                emit("hack_error", {"message": "LLM 未能生成代码"})
             return None
 
         brute_code = gen_result.get("brute_code", "")
         gen_code = gen_result.get("generator_code", "")
         if not brute_code or not gen_code:
-            return {"ok": False, "error": "LLM 未能生成有效的暴力解或生成器代码。",
+            if emit:
+                emit("hack_error", {"message": "LLM 返回的代码为空"})
+            return {"ok": False, "error": "LLM 未能生成有效的代码。",
                     "brute_code": brute_code, "generator_code": gen_code}
 
-        # Step 2: Run 对拍 locally
-        hack = _run_hack(submission.code, brute_code, gen_code, max_rounds=200)
+        if emit:
+            emit("hack_compile", {"message": "正在编译并对拍..."})
+
+        hack = _run_hack(wa_code=submission.code, brute_code=brute_code,
+                         generator_code=gen_code, max_rounds=200)
+
+        if emit:
+            emit("hack_done", {"round_count": hack.round_count,
+                  "first_fail": hack.first_fail})
 
         result: dict[str, Any] = {
             "ok": hack.ok,
@@ -369,8 +457,9 @@ class ContestService:
             "error": hack.error,
         }
 
-        # Step 3: If counterexample found, ask LLM to analyze it
         if hack.first_fail > 0 and hack.counterexample_input:
+            if emit:
+                emit("hack_analysis", {"message": "发现反例，AI 正在分析根因..."})
             analysis = self._llm_analyze_counterexample(
                 problem, submission, hack.counterexample_input,
                 hack.wa_output, hack.brute_output, hack.first_fail,

@@ -21,8 +21,9 @@ export function ContestTab() {
   const [url, setUrl] = useState('')
   const [handle, setHandle] = useState('')
   const [loadingFetch, setLoadingFetch] = useState(false)
-  const [loadingDiagnose, setLoadingDiagnose] = useState(false)
-  const [loadingDeep, setLoadingDeep] = useState(false)
+  const [streaming, setStreaming] = useState(false)
+  const [streamDeep, setStreamDeep] = useState(false)
+  const [progress, setProgress] = useState<Array<{ event: string; message: string }>>([])
   const [problem, setProblem] = useState<Record<string, unknown> | null>(null)
   const [aiReviewed, setAiReviewed] = useState(false)
   const [aiAvailable, setAiAvailable] = useState(false)
@@ -62,21 +63,79 @@ export function ContestTab() {
 
   async function handleDiagnose(deep = false) {
     if (!problem || !code.trim()) { setError('请先导入题目并输入或选择代码'); return }
-    if (deep) { setLoadingDeep(true) } else { setLoadingDiagnose(true) }
-    setError('')
+    setStreaming(true); setStreamDeep(deep); setError(''); setDiagnosis(null)
+    setProgress([{ event: 'start', message: deep ? '开始深度诊断...' : '开始诊断...' }])
+
     try {
-      const result = await api.postContestDiagnose({
-        problem: {
-          platform: problem.platform, source_url: problem.source_url, title: problem.title,
-          tags: problem.tags, samples: problem.samples, statement_markdown: problem.statement_markdown,
-        },
-        submission: { platform: problem.platform || 'codeforces', problem_id: problem.problem_id || '', verdict, language, code },
-        deep,
+      const resp = await fetch('http://127.0.0.1:18765/v1/contest/diagnose/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem: {
+            platform: problem.platform, source_url: problem.source_url, title: problem.title,
+            tags: problem.tags, samples: problem.samples, statement_markdown: problem.statement_markdown,
+          },
+          submission: { platform: problem.platform || 'codeforces', problem_id: problem.problem_id || '',
+            verdict, language, code },
+          deep,
+        }),
       })
-      setDiagnosis((result.diagnosis as Record<string, unknown>) || null)
-    } catch (e) { setError(String(e)) }
-    finally {
-      if (deep) { setLoadingDeep(false) } else { setLoadingDiagnose(false) }
+
+      if (!resp.ok) { setError('服务器错误: ' + resp.status); return }
+
+      const reader = resp.body?.getReader()
+      if (!reader) { setError('浏览器不支持流式响应'); return }
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const item = JSON.parse(line.slice(6))
+            const event = item.event as string
+            const data = item.data as Record<string, unknown>
+
+            switch (event) {
+              case 'sample_start':
+                setProgress(p => [...p, { event, message: String(data.message || '') }])
+                break
+              case 'sample_result':
+                setProgress(p => [...p, { event, message: `样例 ${data.index}: ${data.passed ? '✓ 通过' : '✗ 失败'}` }])
+                break
+              case 'llm_diagnose':
+              case 'hack_generate':
+              case 'hack_compile':
+              case 'hack_analysis':
+                setProgress(p => [...p, { event, message: String(data.message || '') }])
+                break
+              case 'hack_done':
+                setProgress(p => [...p, { event, message: `对拍完成 (${data.round_count} 轮)` + (data.first_fail && Number(data.first_fail) > 0 ? `, 第 ${data.first_fail} 轮发现反例` : ', 未发现反例') }])
+                break
+              case 'hack_error':
+                setProgress(p => [...p, { event, message: '对拍错误: ' + String(data.message || '') }])
+                break
+              case 'done':
+                setDiagnosis(data)
+                setProgress(p => [...p, { event, message: '诊断完成' }])
+                break
+              case 'error':
+                setError(String(data.message || '诊断失败'))
+                break
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setStreaming(false)
     }
   }
 
@@ -314,14 +373,31 @@ export function ContestTab() {
 
                     <div className="flex gap-2">
                       <Button iconLeft={<Play className="h-4 w-4" />} onClick={() => void handleDiagnose(false)}
-                        disabled={loadingDiagnose || loadingDeep || !code.trim()}>
-                        {loadingDiagnose ? '诊断中...' : '快速诊断'}
+                        disabled={streaming || !code.trim()}>
+                        {streaming && !streamDeep ? '诊断中...' : '快速诊断'}
                       </Button>
                       <Button iconLeft={<Search className="h-4 w-4" />} onClick={() => void handleDiagnose(true)}
-                        disabled={loadingDiagnose || loadingDeep || !code.trim()}>
-                        {loadingDeep ? '对拍中...' : '深度诊断（对拍）'}
+                        disabled={streaming || !code.trim()}>
+                        {streaming && streamDeep ? '对拍中...' : '深度诊断（对拍）'}
                       </Button>
                     </div>
+
+                    {/* Streaming progress */}
+                    {streaming && progress.length > 0 ? (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-1">
+                        <p className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                          实时进度
+                        </p>
+                        <div className="max-h-40 overflow-y-auto space-y-0.5">
+                          {progress.map((p, i) => (
+                            <p key={i} className="text-[11px] text-blue-600">
+                              {p.message}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

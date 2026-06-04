@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import queue
+import threading
 
 from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 
 from app.contest.models import ProblemSnapshot, SubmissionSnapshot
 from app.contest.service import ContestService
@@ -166,6 +170,57 @@ def diagnose_wa(payload: dict, request: Request):
     diagnosis = service.diagnose_wa(problem, submission, deep=deep)
 
     return success({"diagnosis": diagnosis})
+
+
+# ── SSE Streaming Diagnosis ────────────────────────────
+
+
+@router.post("/diagnose/stream")
+async def diagnose_stream(payload: dict, request: Request):
+    """Streaming WA diagnosis via Server-Sent Events — no timeout, real-time progress."""
+    problem_data = payload.get("problem", {})
+    submission_data = payload.get("submission", {})
+    deep = bool(payload.get("deep", False))
+
+    problem = ProblemSnapshot.from_dict(problem_data)
+    submission = SubmissionSnapshot.from_dict(submission_data)
+
+    service = _get_service(request)
+    event_queue: queue.Queue[dict] = queue.Queue()
+    loop = asyncio.get_running_loop()
+
+    def emit(event: str, data: Any) -> None:
+        event_queue.put({"event": event, "data": data})
+
+    def run_diagnosis() -> None:
+        try:
+            service.diagnose_wa_stream(problem, submission, emit=emit, deep=deep)
+        except Exception as e:
+            emit("error", {"message": str(e)})
+
+    thread = threading.Thread(target=run_diagnosis, daemon=True)
+    thread.start()
+
+    async def event_generator():
+        while True:
+            try:
+                item = await loop.run_in_executor(None, event_queue.get, True, 10)
+                yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+                if item["event"] == "done" or item["event"] == "error":
+                    break
+            except queue.Empty:
+                # Keep-alive ping every 10s
+                yield f": keepalive\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── Compiler discovery ────────────────────────────────
