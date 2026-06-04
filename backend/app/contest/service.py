@@ -39,7 +39,7 @@ class ContestService:
             return None
         return config
 
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> str | None:
+    def _call_llm(self, system_prompt: str, user_prompt: str, max_tokens: int = 800) -> str | None:
         config = self._get_llm_config()
         if config is None:
             return None
@@ -63,7 +63,7 @@ class ContestService:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.2,
-            "max_tokens": 800,
+            "max_tokens": max_tokens,
         }
 
         try:
@@ -181,8 +181,9 @@ class ContestService:
 
         system = "你是一位算法竞赛教练，擅长分析题目的知识点和学习价值。只返回 JSON，不要任何额外文字。"
 
-        result = self._call_llm(system, prompt)
+        result = self._call_llm(system, prompt, max_tokens=2000)
         if result is None:
+            _logger.info("AI review skipped: LLM unavailable for problem %s", problem.title)
             return {
                 "tags": problem.tags,
                 "educational_value": "",
@@ -191,38 +192,23 @@ class ContestService:
             }
 
         # Parse JSON from LLM response
-        try:
-            cleaned = result.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```\w*\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```$", "", cleaned)
-            parsed = json.loads(cleaned)
+        parsed = self._parse_json_safe(result)
+        if isinstance(parsed, dict):
             return {
                 "tags": parsed.get("tags", problem.tags),
                 "educational_value": parsed.get("educational_value", ""),
                 "prerequisites": parsed.get("prerequisites", []),
                 "ai_reviewed": True,
             }
-        except (json.JSONDecodeError, TypeError):
-            # Try to extract JSON object from response
-            m = re.search(r"\{[^{}]*\}", result, re.DOTALL)
-            if m:
-                try:
-                    parsed = json.loads(m.group())
-                    return {
-                        "tags": parsed.get("tags", problem.tags),
-                        "educational_value": parsed.get("educational_value", ""),
-                        "prerequisites": parsed.get("prerequisites", []),
-                        "ai_reviewed": True,
-                    }
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            return {
-                "tags": problem.tags,
-                "educational_value": "",
-                "prerequisites": [],
-                "ai_reviewed": False,
-            }
+
+        _logger.warning("AI review parse failed for %s. Raw response (first 500 chars): %s",
+                        problem.title, result[:500])
+        return {
+            "tags": problem.tags,
+            "educational_value": "",
+            "prerequisites": [],
+            "ai_reviewed": False,
+        }
 
     # ── Submission fetching ────────────────────────────
 
@@ -417,7 +403,7 @@ class ContestService:
 4. 只返回 JSON，不要 markdown 代码块。JSON 字符串中的换行用 \\n 转义。"""
 
         system = "你是一位 C++ 竞赛编程专家。只返回严格的 JSON，字符串中的代码用 \\n 转义。"
-        result = self._call_llm(system, prompt)
+        result = self._call_llm(system, prompt, max_tokens=4000)
         if result is None:
             return None
 
@@ -456,7 +442,7 @@ class ContestService:
 只返回 JSON 数组。"""
 
         system = "你是一位算法竞赛教练，擅长基于反例定位代码错误。只返回 JSON 数组。"
-        result = self._call_llm(system, prompt)
+        result = self._call_llm(system, prompt, max_tokens=1200)
         if result is None:
             return None
 
@@ -467,7 +453,7 @@ class ContestService:
 
     @staticmethod
     def _parse_json_safe(text: str) -> Any | None:
-        """Extract JSON from LLM response, handling markdown code blocks."""
+        """Extract JSON from LLM response, handling markdown code blocks and nested objects."""
         cleaned = text.strip()
         # Remove markdown code fences
         if cleaned.startswith("```"):
@@ -476,20 +462,21 @@ class ContestService:
         try:
             return json.loads(cleaned)
         except (json.JSONDecodeError, TypeError):
-            # Try to extract JSON object
-            m = re.search(r"\{[^{}]*\}", cleaned, re.DOTALL)
-            if m:
-                try:
-                    return json.loads(m.group())
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            # Try to extract JSON array
-            m = re.search(r"\[[^\[\]]*\]", cleaned, re.DOTALL)
-            if m:
-                try:
-                    return json.loads(m.group())
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            pass
+        # Try to extract JSON object with nesting support
+        m = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group())
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Try to extract JSON array with nesting support
+        m = re.search(r"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group())
+            except (json.JSONDecodeError, TypeError):
+                pass
         return None
 
     def _rule_based_check(
@@ -564,8 +551,7 @@ class ContestService:
 结合样例测试结果进行分析。只返回 JSON 数组，不要其他文字。"""
 
         system = "你是一位算法竞赛教练，擅长分析代码中的 WA 错误。只返回 JSON 数组。"
-
-        result = self._call_llm(system, prompt)
+        result = self._call_llm(system, prompt, max_tokens=1200)
         if result is None:
             return None
 
