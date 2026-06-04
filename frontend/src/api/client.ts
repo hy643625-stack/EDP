@@ -338,11 +338,11 @@ export const api = {
   tutorLearningSession: (sessionId: string, question: string) =>
     unwrap<LearningTutorResponse>(() => http.post(`/v1/learning/sessions/${sessionId}/tutor`, { question })),
 
-  // Phase 6: Contest
+  // Phase 6: Contest (longer timeouts: CF API + LLM + 对拍)
   postContestFetchProblem: (url: string, handle?: string) =>
-    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/problems/fetch', { url, handle: handle || '' })),
+    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/problems/fetch', { url, handle: handle || '' }, { timeout: 60000 })),
   postContestFetchCfSubmissions: (handle: string) =>
     unwrap<Record<string, unknown>[]>(() => http.post('/v1/contest/submissions/fetch-cf', { handle })),
   postContestDiagnose: (payload: Record<string, unknown>) =>
-    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/diagnose', payload)),
+    unwrap<Record<string, unknown>>(() => http.post('/v1/contest/diagnose', payload, { timeout: 180000 })),
 }

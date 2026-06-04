@@ -25,7 +25,7 @@ export function ContestTab() {
   const [loadingDeep, setLoadingDeep] = useState(false)
   const [problem, setProblem] = useState<Record<string, unknown> | null>(null)
   const [aiReviewed, setAiReviewed] = useState(false)
-  const [aiAvailable, setAiAvailable] = useState(true)
+  const [aiAvailable, setAiAvailable] = useState(false)
   const [submissions, setSubmissions] = useState<CfSubmission[]>([])
   const [code, setCode] = useState('')
   const [verdict, setVerdict] = useState('WA')
@@ -52,7 +52,7 @@ export function ContestTab() {
       if (result.error) { setError(String(result.error)); return }
       setProblem((result.problem as Record<string, unknown>) || null)
       setAiReviewed(Boolean(result.ai_reviewed))
-      setAiAvailable(result.ai_available !== false)
+      setAiAvailable(result.ai_available === true)
       setSubmissions((result.submissions as CfSubmission[]) || [])
       setCode('')
       setShowCodePanel(false)
@@ -174,7 +174,7 @@ export function ContestTab() {
                     </span>
                   ) : aiAvailable ? (
                     <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                      <Lightbulb className="h-3 w-3" />未触发 AI 审题
+                      <Lightbulb className="h-3 w-3" />AI 审题未命中
                     </span>
                   ) : null}
                 </div>
