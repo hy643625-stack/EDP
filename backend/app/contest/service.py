@@ -5,19 +5,23 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.parse
+from html.parser import HTMLParser
+from html import unescape
 from typing import Any
 
 import httpx
 
 from app.contest.models import ProblemSnapshot, SubmissionSnapshot
 from app.db import Database
+from app.services.llm import call_llm as _llm, parse_json_safe
 
 CF_API = "https://codeforces.com/api"
 _logger = logging.getLogger(__name__)
 
 
+# Re-export for API access
 def _http_client(timeout: int = 15) -> httpx.Client:
-    """Create an httpx client that bypasses system proxy for external API calls."""
     return httpx.Client(timeout=timeout, trust_env=False)
 
 
@@ -26,70 +30,22 @@ class ContestService:
         self.db = db
         self.ai_settings = ai_settings_service
 
-    # ── LLM helper ─────────────────────────────────────
+    # ── LLM helpers ────────────────────────────────────
 
     def _get_llm_config(self) -> dict[str, Any] | None:
         if self.ai_settings is None:
             return None
         try:
-            config = self.ai_settings.get_runtime_provider_config()
+            return self.ai_settings.get_runtime_provider_config()
         except Exception:
             return None
-        if config is None:
-            return None
-        return config
 
     def _call_llm(self, system_prompt: str, user_prompt: str, max_tokens: int = 800) -> str | None:
-        config = self._get_llm_config()
-        if config is None:
-            _logger.info("LLM call skipped: no config")
-            return None
+        return _llm(self.ai_settings, system_prompt, user_prompt, max_tokens)
 
-        base_url = str(config.get("base_url", "")).rstrip("/")
-        model = str(config.get("model_name", ""))
-        api_key = str(config.get("api_key", ""))
-        # Use a generous timeout; SSE keeps the connection alive via heartbeats
-        timeout = max(int(config.get("timeout_seconds", 30)), 300)
-
-        if not base_url or not model:
-            _logger.warning("LLM call skipped: missing base_url or model_name")
-            return None
-
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        body = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.2,
-            "max_tokens": max_tokens,
-        }
-
-        try:
-            with _http_client(timeout=timeout) as client:
-                resp = client.post(
-                    f"{base_url}/chat/completions",
-                    headers=headers,
-                    json=body,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            _logger.info("LLM response received: %d chars", len(content))
-            return content
-        except httpx.TimeoutException:
-            _logger.error("LLM call timed out after %ds to %s", timeout, base_url)
-            return None
-        except httpx.HTTPStatusError as e:
-            _logger.error("LLM HTTP %d: %s", e.response.status_code, e.response.text[:300])
-            return None
-        except Exception as e:
-            _logger.error("LLM call failed: %s", e)
-            return None
+    @staticmethod
+    def _parse_json_safe(text: str) -> Any | None:
+        return parse_json_safe(text)
 
     # ── Problem fetching ──────────────────────────────
 
@@ -132,6 +88,29 @@ class ContestService:
             tags=tags,
         )
 
+    def fetch_codeforces_problem_full(self, url: str) -> tuple[ProblemSnapshot, dict[str, Any] | None]:
+        """Fetch CF problem with full scraping: metadata from API + statement/samples from HTML."""
+        parsed = self._parse_cf_url(url)
+        if parsed is None:
+            raise ValueError(f"无法解析 Codeforces 题目链接: {url}")
+
+        contest_id = parsed["contest_id"]
+        index = parsed["index"]
+
+        problem = self.fetch_codeforces_problem(url)
+
+        # Try scraping full statement from CF page
+        page = self._fetch_cf_problem_page(url)
+        if page:
+            problem.statement_markdown = page["statement_markdown"] or problem.statement_markdown
+            problem.input_format = page["input_format"]
+            problem.output_format = page["output_format"]
+            problem.samples = page["samples"]
+            if page["constraints"]:
+                problem.constraints = [page["constraints"]]
+
+        return problem, page
+
     @staticmethod
     def _parse_cf_url(url: str) -> dict[str, Any] | None:
         patterns = [
@@ -143,6 +122,40 @@ class ContestService:
             if m:
                 return {"contest_id": int(m.group(1)), "index": m.group(2)}
         return None
+
+    # ── CF problem page scraping ───────────────────────
+
+    def _fetch_cf_problem_page(self, url: str) -> dict[str, Any] | None:
+        """Scrape CF problem page HTML to extract statement, samples, etc.
+        Returns dict with statement_markdown, input_format, output_format,
+        samples, constraints, or None on failure."""
+        try:
+            with _http_client(timeout=15) as client:
+                resp = client.get(url, headers={
+                    "User-Agent": "EDP/1.0 (contest analysis; educational use)",
+                })
+                resp.raise_for_status()
+                html = resp.text
+        except Exception as e:
+            _logger.warning("Failed to fetch CF page %s: %s", url, e)
+            return None
+
+        parser = _CFProblemParser()
+        try:
+            parser.feed(html)
+        except Exception:
+            return None
+
+        if not parser.samples and not parser.statement_parts:
+            return None
+
+        return {
+            "statement_markdown": "\n\n".join(parser.statement_parts) if parser.statement_parts else "",
+            "input_format": "\n".join(parser.input_parts) if parser.input_parts else "",
+            "output_format": "\n".join(parser.output_parts) if parser.output_parts else "",
+            "samples": parser.samples,
+            "constraints": "\n".join(parser.note_parts) if parser.note_parts else "",
+        }
 
     def import_manual_problem(self, title: str, statement: str, platform: str = "manual",
                               source_url: str = "", tags: list[str] | None = None,
@@ -552,39 +565,6 @@ class ContestService:
             return parsed
         return None
 
-    @staticmethod
-    def _parse_json_safe(text: str) -> Any | None:
-        """Extract JSON from LLM response using brace counting (handles arbitrary nesting)."""
-        cleaned = text.strip()
-        # Remove markdown code fences (with or without surrounding text)
-        fence_m = re.search(r"```(?:\w+)?\s*\n(.*?)\n```", cleaned, re.DOTALL)
-        if fence_m:
-            cleaned = fence_m.group(1).strip()
-
-        # Try direct parse first
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        # Extract outermost JSON object or array by counting brackets
-        for open_char, close_char in (("{", "}"), ("[", "]")):
-            start = cleaned.find(open_char)
-            if start < 0:
-                continue
-            depth = 0
-            for i in range(start, len(cleaned)):
-                if cleaned[i] == open_char:
-                    depth += 1
-                elif cleaned[i] == close_char:
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            return json.loads(cleaned[start:i + 1])
-                        except (json.JSONDecodeError, TypeError):
-                            break
-        return None
-
     def _rule_based_check(
         self, code: str, problem: ProblemSnapshot, algo: dict[str, bool],
     ) -> list[dict[str, str]]:
@@ -684,3 +664,78 @@ class ContestService:
             "segment_tree": bool(re.search(r"segtree|segment_tree|BIT\[|fenwick|tree\[.*\]", code)),
             "math": bool(re.search(r"mod\s*=|gcd\(|lcm\(|prime|sieve|pow\(|factorial", code)),
         }
+
+
+# ── CF problem page HTML parser ───────────────────
+
+
+class _CFProblemParser(HTMLParser):
+    """Extract problem statement, samples, and constraints from CF problem page HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_problem = False
+        self._section: str = ""  # "input", "output", "sample", "note"
+        self._in_p = False
+        self._in_pre = False
+        self._text_buf: list[str] = []
+        self._sample_input_pending: str | None = None
+
+        self.statement_parts: list[str] = []
+        self.input_parts: list[str] = []
+        self.output_parts: list[str] = []
+        self.samples: list[dict[str, str]] = []
+        self.note_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        cls = dict(attrs).get("class", "")
+
+        if tag == "div" and cls == "problem-statement":
+            self._in_problem = True
+        elif tag == "div" and self._in_problem:
+            if cls == "input-specification":
+                self._section = "input"
+            elif cls == "output-specification":
+                self._section = "output"
+            elif cls == "sample-test":
+                self._section = "sample"
+            elif cls == "note":
+                self._section = "note"
+        elif tag == "p":
+            self._in_p = True
+            self._text_buf = []
+        elif tag == "pre":
+            self._in_pre = True
+            self._text_buf = []
+        elif tag == "br":
+            self._text_buf.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        text = unescape("".join(self._text_buf)).strip()
+
+        if tag == "p" and self._in_p:
+            self._in_p = False
+            if text:
+                dst = (
+                    self.input_parts if self._section == "input"
+                    else self.output_parts if self._section == "output"
+                    else self.note_parts if self._section == "note"
+                    else self.statement_parts
+                )
+                dst.append(text)
+
+        elif tag == "pre" and self._in_pre:
+            self._in_pre = False
+            if self._section == "sample" and text:
+                if self._sample_input_pending is None:
+                    self._sample_input_pending = text
+                else:
+                    self.samples.append({
+                        "input": self._sample_input_pending,
+                        "output": text,
+                    })
+                    self._sample_input_pending = None
+
+    def handle_data(self, data: str) -> None:
+        if self._in_pre or self._in_p:
+            self._text_buf.append(data)

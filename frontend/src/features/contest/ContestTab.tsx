@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { api } from '@/api/client'
+import { api, API_BASE_URL } from '@/api/client'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../../packages/ui/src'
-import { CheckCircle2, ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Search, Send, Tag, Terminal, Trophy, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Code2, ExternalLink, Lightbulb, Link, Play, Search, Tag, Terminal, Trophy, XCircle } from 'lucide-react'
 
 interface CfSubmission {
   platform: string
@@ -27,6 +27,7 @@ export function ContestTab() {
   const [problem, setProblem] = useState<Record<string, unknown> | null>(null)
   const [aiReviewed, setAiReviewed] = useState(false)
   const [aiAvailable, setAiAvailable] = useState(false)
+  const [importQuality, setImportQuality] = useState('manual')
   const [submissions, setSubmissions] = useState<CfSubmission[]>([])
   const [code, setCode] = useState('')
   const [verdict, setVerdict] = useState('WA')
@@ -38,7 +39,7 @@ export function ContestTab() {
   const [compilerInfo, setCompilerInfo] = useState<Record<string, unknown> | null>(null)
 
   useEffect(() => {
-    fetch('http://127.0.0.1:18765/v1/contest/compilers')
+    fetch(`${API_BASE_URL}/v1/contest/compilers`)
       .then(r => r.json())
       .then(d => { if (d.data) setCompilerInfo(d.data as Record<string, unknown>) })
       .catch(() => {})
@@ -51,11 +52,17 @@ export function ContestTab() {
     try {
       const result = await api.postContestFetchProblem(url, handle.trim() || undefined)
       if (result.error) { setError(String(result.error)); return }
-      setProblem((result.problem as Record<string, unknown>) || null)
+      const prob = (result.problem as Record<string, unknown>) || null
+      setProblem(prob)
       setAiReviewed(Boolean(result.ai_reviewed))
       setAiAvailable(result.ai_available === true)
+      setImportQuality(String(result.import_quality || 'manual'))
       setSubmissions((result.submissions as CfSubmission[]) || [])
-      setCode('')
+
+      // Restore cached code from localStorage
+      const pid = prob?.problem_id as string || ''
+      const cached = pid ? localStorage.getItem(`edp_code_${pid}`) : null
+      setCode(cached || '')
       setShowCodePanel(false)
     } catch (e) { setError(String(e)) }
     finally { setLoadingFetch(false) }
@@ -67,7 +74,7 @@ export function ContestTab() {
     setProgress([{ event: 'start', message: deep ? '开始深度诊断...' : '开始诊断...' }])
 
     try {
-      const resp = await fetch('http://127.0.0.1:18765/v1/contest/diagnose/stream', {
+      const resp = await fetch(`${API_BASE_URL}/v1/contest/diagnose/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,6 +148,23 @@ export function ContestTab() {
 
   function handleSelectSubmission(idx: number) {
     setSelectedSubIdx(idx)
+    const sub = submissions[idx]
+    if (!sub) return
+    const vMap: Record<string, string> = {
+      OK: 'AC', WRONG_ANSWER: 'WA', TIME_LIMIT_EXCEEDED: 'TLE',
+      RUNTIME_ERROR: 'RE', MEMORY_LIMIT_EXCEEDED: 'MLE', COMPILATION_ERROR: 'CE',
+    }
+    setVerdict(vMap[sub.verdict] || 'UNKNOWN')
+    setLanguage(sub.language || 'C++')
+  }
+
+  function handleCodeChange(value: string) {
+    setCode(value)
+    // Save draft to localStorage
+    const pid = problem?.problem_id as string || problem?.source_url as string || ''
+    if (pid) {
+      localStorage.setItem(`edp_code_${pid}`, value)
+    }
   }
 
   function formatTimestamp(ts: string | number) {
@@ -227,9 +251,13 @@ export function ContestTab() {
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
-                  {aiReviewed ? (
+                  {aiReviewed && importQuality === 'full_statement' ? (
                     <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
                       <Lightbulb className="h-3 w-3" />AI 已审题
+                    </span>
+                  ) : aiReviewed ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                      <AlertTriangle className="h-3 w-3" />基于元数据审题
                     </span>
                   ) : aiAvailable ? (
                     <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
@@ -349,7 +377,7 @@ export function ContestTab() {
                     </div>
 
                     <textarea className="input-clean min-h-[180px] w-full resize-y font-mono text-sm"
-                      value={code} onChange={e => setCode(e.target.value)}
+                      value={code} onChange={e => handleCodeChange(e.target.value)}
                       placeholder="粘贴你的 C++ 代码..." />
 
                     {/* Compiler status */}

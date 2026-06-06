@@ -155,6 +155,10 @@ SCHEMA_STATEMENTS = [
         difficulty INTEGER DEFAULT 0,
         educational_value TEXT DEFAULT '',
         prerequisites TEXT DEFAULT '[]',
+        samples TEXT DEFAULT '[]',
+        input_format TEXT DEFAULT '',
+        output_format TEXT DEFAULT '',
+        constraints TEXT DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(platform, problem_id)
@@ -202,22 +206,28 @@ class Database:
                                 source_url: str = "", statement_markdown: str = "",
                                 tags: str = "[]", difficulty: int = 0,
                                 educational_value: str = "", prerequisites: str = "[]",
+                                samples: str = "[]", input_format: str = "",
+                                output_format: str = "", constraints: str = "",
                                 created_at: str = "", updated_at: str = "") -> dict:
         with self.session() as conn:
             conn.execute(
                 """
                 INSERT INTO contest_problems (platform, problem_id, title, source_url,
                     statement_markdown, tags, difficulty, educational_value, prerequisites,
-                    created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    samples, input_format, output_format, constraints, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(platform, problem_id) DO UPDATE SET
                     title=excluded.title, source_url=excluded.source_url,
                     statement_markdown=excluded.statement_markdown, tags=excluded.tags,
                     difficulty=excluded.difficulty, educational_value=excluded.educational_value,
-                    prerequisites=excluded.prerequisites, updated_at=excluded.updated_at
+                    prerequisites=excluded.prerequisites,
+                    samples=excluded.samples, input_format=excluded.input_format,
+                    output_format=excluded.output_format, constraints=excluded.constraints,
+                    updated_at=excluded.updated_at
                 """,
                 (platform, problem_id, title, source_url, statement_markdown,
-                 tags, difficulty, educational_value, prerequisites, created_at, updated_at),
+                 tags, difficulty, educational_value, prerequisites,
+                 samples, input_format, output_format, constraints, created_at, updated_at),
             )
             row = conn.execute(
                 "SELECT * FROM contest_problems WHERE platform = ? AND problem_id = ?",

@@ -1,17 +1,52 @@
-"""Safe C++ compilation and execution for contest diagnosis."""
+"""C++ compilation and execution for contest diagnosis.
+
+Security: three-layer defence —
+  1. Preflight source audit (blocks obvious dangerous calls)
+  2. OS resource limits (CPU, memory, file size) via preexec_fn
+  3. macOS sandbox-exec (optional, detected at runtime)
+
+NOT a sandbox — do not execute untrusted code in production without a VM/container."""
 
 from __future__ import annotations
 
 import os
+import re
+import resource
 import subprocess
 import tempfile
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 COMPILE_TIMEOUT_SEC = 15
 RUN_TIMEOUT_SEC = 5
 MAX_OUTPUT_BYTES = 100_000
+
+# ── Source audit ─────────────────────────────────────
+
+# Only block unambiguously dangerous calls. Do NOT block #include.
+_AUDIT_FORBIDDEN = [
+    r"\bsystem\s*\(",
+    r"\bpopen\s*\(",
+    r"\bfork\s*\(",
+    r"\bexec[lvpe]*\s*\(",
+    r"\bsocket\s*\(",
+    r"\bfopen\s*\(",
+    r"\bfreopen\s*\(",
+    r"\bremove\s*\(",
+    r"\bunlink\s*\(",
+    r"\bdlopen\s*\(",
+    r"\b__asm\b",
+    r"\bsyscall\s*\(",
+]
+
+
+def audit_source(code: str) -> str | None:
+    """Return error message if dangerous patterns found, else None."""
+    for pattern in _AUDIT_FORBIDDEN:
+        if re.search(pattern, code):
+            return f"代码包含禁止的系统调用: {pattern}"
+    return None
 
 
 @dataclass
@@ -54,7 +89,70 @@ class HackResult:
     error: str = ""
 
 
-# ── low-level compile & run ────────────────────────────
+# ── Resource limits ──────────────────────────────────
+
+def _limit_resources() -> None:
+    """Set OS resource limits before executing user code (called via preexec_fn)."""
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (RUN_TIMEOUT_SEC + 5, RUN_TIMEOUT_SEC + 5))
+    except (ValueError, resource.error):
+        pass
+    try:
+        limit = 512 * 1024 * 1024  # 512 MB
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    except (ValueError, resource.error):
+        pass
+    try:
+        resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))
+    except (ValueError, resource.error):
+        pass
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, resource.error):
+        pass
+
+
+_HAS_SANDBOX_EXEC = False
+
+
+def _detect_sandbox_exec() -> bool:
+    """Check if sandbox-exec is available and actually works."""
+    if shutil.which("sandbox-exec") is None:
+        return False
+    try:
+        # Compile a trivial binary and try running it under sandbox-exec
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "test.cpp")
+            out = os.path.join(tmp, "test")
+            with open(src, "w") as f:
+                f.write("int main() { return 0; }")
+            gpp = get_compiler()
+            if gpp is None:
+                return False
+            proc = subprocess.run(
+                [gpp, "-std=c++17", src, "-o", out],
+                capture_output=True, timeout=10,
+            )
+            if proc.returncode != 0:
+                return False
+            proc = subprocess.run(
+                ["sandbox-exec", "-p", "(version 1)(allow default)", out],
+                capture_output=True, timeout=5,
+            )
+            return proc.returncode == 0
+    except Exception:
+        return False
+
+
+_HAS_SANDBOX_EXEC = _detect_sandbox_exec()
+
+
+def _sandbox_cmd(binary_path: str) -> list[str]:
+    """Wrap binary in macOS sandbox-exec if available."""
+    if not _HAS_SANDBOX_EXEC:
+        return [binary_path]
+    profile = "(version 1)(allow default)(deny file-write*)(deny network*)"
+    return ["sandbox-exec", "-p", profile, binary_path]
 
 
 def _norm(s: str) -> str:
@@ -186,6 +284,11 @@ def _find_gpp() -> str | None:
 
 def compile_cpp(code: str, binary_name: str = "sol") -> CompileResult:
     """Compile C++ code to a binary in a temp directory."""
+    # Preflight audit
+    err = audit_source(code)
+    if err:
+        return CompileResult(ok=False, error=err)
+
     gpp = get_compiler()
     if gpp is None:
         return CompileResult(ok=False, error="未找到 C++ 编译器（g++ 或 clang++），请安装 Xcode CLI Tools。")
@@ -216,13 +319,18 @@ def compile_cpp(code: str, binary_name: str = "sol") -> CompileResult:
 
 def run_binary(binary_path: str, input_text: str = "",
                timeout_sec: int = RUN_TIMEOUT_SEC) -> RunResult:
-    """Run a compiled binary with optional input."""
+    """Run a compiled binary with cwd isolation + resource limits + optional sandbox."""
+    tmpdir = os.path.dirname(binary_path)
+    cmd = _sandbox_cmd(binary_path)
+
     try:
         proc = subprocess.run(
-            [binary_path],
+            cmd,
             input=input_text.encode("utf-8", errors="replace") if input_text else b"",
             capture_output=True,
             timeout=timeout_sec,
+            cwd=tmpdir,
+            preexec_fn=_limit_resources,
         )
     except subprocess.TimeoutExpired:
         return RunResult(ok=False, timed_out=True, error=f"运行超时（>{timeout_sec}s）")

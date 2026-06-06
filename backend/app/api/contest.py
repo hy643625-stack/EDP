@@ -35,10 +35,13 @@ def fetch_problem(payload: dict, request: Request):
         return success({"error": "请提供题目链接"})
 
     service = _get_service(request)
+    import_quality = "manual"
+    page_data = None
 
     if "codeforces.com" in url:
         try:
-            problem = service.fetch_codeforces_problem(url)
+            problem, page_data = service.fetch_codeforces_problem_full(url)
+            import_quality = "full_statement" if page_data and page_data.get("statement_markdown") else "metadata_only"
         except Exception as e:
             return success({"error": str(e)})
     else:
@@ -50,6 +53,7 @@ def fetch_problem(payload: dict, request: Request):
             tags=payload.get("tags", []),
             samples=payload.get("samples", []),
         )
+        import_quality = "manual"
 
     # AI review: enrich tags, educational value, prerequisites
     review = service.review_problem(problem)
@@ -63,15 +67,15 @@ def fetch_problem(payload: dict, request: Request):
     # Determine problem_id for DB
     parsed = service._parse_cf_url(url)
     if parsed and "codeforces.com" in url:
-        platform = "codeforces"
+        platform_db = "codeforces"
         problem_id_str = f"{parsed['contest_id']}{parsed['index']}"
     else:
-        platform = str(problem.platform)
+        platform_db = str(problem.platform)
         problem_id_str = payload.get("problem_id", "") or url.split("/")[-1] or url
 
-    # Save/update in DB
+    # Save to DB with full data
     db_record = request.app.state.db.upsert_contest_problem(
-        platform=platform,
+        platform=platform_db,
         problem_id=problem_id_str,
         title=str(problem.title),
         source_url=url,
@@ -80,6 +84,10 @@ def fetch_problem(payload: dict, request: Request):
         difficulty=payload.get("difficulty", 0),
         educational_value=educational_value,
         prerequisites=json.dumps(prerequisites if isinstance(prerequisites, list) else [], ensure_ascii=False),
+        samples=json.dumps(problem.samples, ensure_ascii=False),
+        input_format=str(problem.input_format),
+        output_format=str(problem.output_format),
+        constraints=json.dumps(problem.constraints, ensure_ascii=False),
         created_at=str(problem.fetched_at),
         updated_at=str(problem.fetched_at),
     )
@@ -92,14 +100,19 @@ def fetch_problem(payload: dict, request: Request):
             all_subs, str(parsed["contest_id"]), parsed["index"],
         )
 
+    # Build response with parsed JSON fields
+    resp_problem: dict[str, Any] = dict(db_record)
+    for field in ("tags", "prerequisites", "samples", "constraints"):
+        try:
+            resp_problem[field] = json.loads(resp_problem.get(field, "[]"))
+        except (json.JSONDecodeError, TypeError):
+            resp_problem[field] = []
+
     return success({
-        "problem": {
-            **db_record,
-            "tags": merged_tags if isinstance(merged_tags, list) else json.loads(db_record.get("tags", "[]")),
-            "prerequisites": prerequisites if isinstance(prerequisites, list) else json.loads(db_record.get("prerequisites", "[]")),
-        },
+        "problem": resp_problem,
         "ai_reviewed": review.get("ai_reviewed", False),
         "ai_available": ai_available,
+        "import_quality": import_quality,
         "submissions": submissions,
     })
 
@@ -108,14 +121,11 @@ def fetch_problem(payload: dict, request: Request):
 def list_problems(request: Request):
     problems = request.app.state.db.list_contest_problems()
     for p in problems:
-        try:
-            p["tags"] = json.loads(p.get("tags", "[]"))
-        except (json.JSONDecodeError, TypeError):
-            p["tags"] = []
-        try:
-            p["prerequisites"] = json.loads(p.get("prerequisites", "[]"))
-        except (json.JSONDecodeError, TypeError):
-            p["prerequisites"] = []
+        for field in ("tags", "prerequisites", "samples", "constraints"):
+            try:
+                p[field] = json.loads(p.get(field, "[]"))
+            except (json.JSONDecodeError, TypeError):
+                p[field] = []
     return success(problems)
 
 
