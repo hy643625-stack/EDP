@@ -1,11 +1,14 @@
 """C++ compilation and execution for contest diagnosis.
 
-Security: three-layer defence —
-  1. Preflight source audit (blocks obvious dangerous calls)
-  2. OS resource limits (CPU, memory, file size) via preexec_fn
-  3. macOS sandbox-exec (optional, detected at runtime)
+WARNING: NOT a security sandbox.
+- Code runs as a subprocess on the host machine.
+- Preflight audit blocks obvious danger (system/popen/fork/etc) but cannot
+  prevent all malicious behavior (e.g. file reads via ifstream).
+- Resource limits (CPU, memory, file size) are enforced but can be bypassed.
+- macOS sandbox-exec is optional and may not be available.
 
-NOT a sandbox — do not execute untrusted code in production without a VM/container."""
+Only execute code you trust as if you were running it locally.
+For untrusted code, use a full VM or container."""
 
 from __future__ import annotations
 

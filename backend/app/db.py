@@ -199,6 +199,24 @@ class Database:
             for statement in SCHEMA_STATEMENTS:
                 conn.execute(statement)
             self._seed_defaults(conn)
+            self._migrate_contest_problems(conn)
+
+    @staticmethod
+    def _migrate_contest_problems(conn: sqlite3.Connection) -> None:
+        """Add missing columns to contest_problems for forward compatibility."""
+        existing = {
+            row[1] for row in
+            conn.execute("PRAGMA table_info(contest_problems)").fetchall()
+        }
+        needed = {
+            "samples": "TEXT DEFAULT '[]'",
+            "input_format": "TEXT DEFAULT ''",
+            "output_format": "TEXT DEFAULT ''",
+            "constraints": "TEXT DEFAULT ''",
+        }
+        for col, col_def in needed.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE contest_problems ADD COLUMN {col} {col_def}")
 
     # ── Contest problem helpers ─────────────────────────
 

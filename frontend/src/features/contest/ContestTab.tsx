@@ -60,8 +60,8 @@ export function ContestTab() {
       setSubmissions((result.submissions as CfSubmission[]) || [])
 
       // Restore cached code from localStorage
-      const pid = prob?.problem_id as string || ''
-      const cached = pid ? localStorage.getItem(`edp_code_${pid}`) : null
+      const platformPid = `${prob?.platform || ''}:${prob?.problem_id || ''}`
+      const cached = platformPid !== ':' ? localStorage.getItem(`edp_code_${platformPid}`) : null
       setCode(cached || '')
       setShowCodePanel(false)
     } catch (e) { setError(String(e)) }
@@ -152,7 +152,7 @@ export function ContestTab() {
     if (!sub) return
     const vMap: Record<string, string> = {
       OK: 'AC', WRONG_ANSWER: 'WA', TIME_LIMIT_EXCEEDED: 'TLE',
-      RUNTIME_ERROR: 'RE', MEMORY_LIMIT_EXCEEDED: 'MLE', COMPILATION_ERROR: 'CE',
+      RUNTIME_ERROR: 'RE', MEMORY_LIMIT_EXCEEDED: 'MLE',
     }
     setVerdict(vMap[sub.verdict] || 'UNKNOWN')
     setLanguage(sub.language || 'C++')
@@ -160,10 +160,9 @@ export function ContestTab() {
 
   function handleCodeChange(value: string) {
     setCode(value)
-    // Save draft to localStorage
-    const pid = problem?.problem_id as string || problem?.source_url as string || ''
-    if (pid) {
-      localStorage.setItem(`edp_code_${pid}`, value)
+    const key = `${problem?.platform || ''}:${problem?.problem_id || problem?.source_url || ''}`
+    if (key !== ':') {
+      localStorage.setItem(`edp_code_${key}`, value)
     }
   }
 
@@ -369,7 +368,7 @@ export function ContestTab() {
 
                     <div className="flex gap-2 flex-wrap">
                       <select className="input-clean w-auto text-xs" value={language} onChange={e => setLanguage(e.target.value)}>
-                        <option>C++</option><option>Python</option><option>Java</option>
+                        <option>C++</option>
                       </select>
                       <select className="input-clean w-auto text-xs" value={verdict} onChange={e => setVerdict(e.target.value)}>
                         <option>WA</option><option>TLE</option><option>RE</option><option>AC</option><option>MLE</option><option>UNKNOWN</option>

@@ -139,14 +139,11 @@ def get_problem(problem_id: str, request: Request):
         return success({"error": "无效的题目 ID 格式，请使用 platform:problem_id"})
     if p is None:
         return success({"error": "题目不存在"})
-    try:
-        p["tags"] = json.loads(p.get("tags", "[]"))
-    except (json.JSONDecodeError, TypeError):
-        p["tags"] = []
-    try:
-        p["prerequisites"] = json.loads(p.get("prerequisites", "[]"))
-    except (json.JSONDecodeError, TypeError):
-        p["prerequisites"] = []
+    for field in ("tags", "prerequisites", "samples", "constraints"):
+        try:
+            p[field] = json.loads(p.get(field, "[]"))
+        except (json.JSONDecodeError, TypeError):
+            p[field] = []
     return success(p)
 
 
