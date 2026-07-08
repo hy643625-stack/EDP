@@ -209,12 +209,12 @@ class LearningAgentService:
             try:
                 enhancement = self._generate_model_enhancement(course, profile, package, runtime_provider)
             except Exception as exc:
-                fallback_reason = f"{self._format_model_error(exc)}，已自动回退到本地规则算法。"
+                fallback_reason = f"{self._format_model_error(exc)}，已自动回退到本地规则算法"
             else:
                 package = self._merge_model_enhancement(package, enhancement)
                 mode_used = "model"
         elif not execution_plan["uses_local_rules"]:
-            fallback_reason = "当前 AI 配置尚未就绪，已自动回退到本地规则算法。"
+            fallback_reason = "当前 AI 配置尚未就绪，已自动回退到本地规则算法"
 
         return {
             "course": course,
@@ -1671,11 +1671,11 @@ _FALLBACK_ADVANCED_MATH_COURSE: dict[str, Any] = {
     "tags": ["数学", "考研", "理论"],
     "module_count": 6,
     "modules": [
-        {"module_id": "am-01", "title": "极限与连续", "core_points": ["函数", "极限", "连续"], "outcome": "能判断连续与极限行为。"},
-        {"module_id": "am-02", "title": "导数与微分", "core_points": ["导数定义", "求导法则", "微分"], "outcome": "能完成一元求导。"},
+        {"module_id": "am-01", "title": "极限与连续", "core_points": ["函数", "极限", "连续"], "outcome": "能判断连续与极限行为"},
+        {"module_id": "am-02", "title": "导数与微分", "core_points": ["导数定义", "求导法则", "微分"], "outcome": "能完成一元求导"},
         {"module_id": "am-03", "title": "导数应用", "core_points": ["单调性", "极值", "中值定理"], "outcome": "能分析函数图像。"},
         {"module_id": "am-04", "title": "积分基础", "core_points": ["换元", "分部积分", "定积分"], "outcome": "能处理核心积分题。"},
-        {"module_id": "am-05", "title": "多元微积分", "core_points": ["偏导", "全微分", "极值"], "outcome": "能分析二元函数。"},
+        {"module_id": "am-05", "title": "多元微积分", "core_points": ["偏导", "全微分", "极值"], "outcome": "能分析二元函数"},
         {"module_id": "am-06", "title": "级数与综合复盘", "core_points": ["收敛性", "幂级数", "综合题"], "outcome": "能完成综合复盘。"},
     ],
 }
