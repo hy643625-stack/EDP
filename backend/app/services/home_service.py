@@ -234,12 +234,12 @@ def _round_metric(value: float) -> float:
 
 def _build_recommendation(completion_rate: float | None, total_target: float | None) -> tuple[str, str]:
     if completion_rate is None or total_target is None:
-        return "renew", "当前属性未设置周期目标，建议先续期保持节奏。"
+        return "renew", "当前属性未设置周期目标，建议先续期保持节奏"
     if completion_rate < 60:
-        return "archive", "完成率偏低，先归档沉淀本周期会更稳。"
+        return "archive", "完成率偏低，先归档沉淀本周期会更稳"
     if completion_rate <= 90:
-        return "renew", "完成率稳定，续期可以延续当前状态。"
-    return "evolve", "完成率极高，建议进阶到更高挑战规则。"
+        return "renew", "完成率稳定，续期可以延续当前状态"
+    return "evolve", "完成率极高，建议进阶到更高挑战规则"
 
 
 def _build_review_copy(
@@ -249,12 +249,12 @@ def _build_review_copy(
     recommended_action: str,
 ) -> str:
     if completion_rate is None or total_target is None:
-        return f"当前周期累计完成 {_round_metric(total_actual)}，尚未设置明确目标，建议先续期保持节奏。"
+        return f"当前周期累计完成 {_round_metric(total_actual)}，尚未设置明确目标，建议先续期保持节奏"
     if recommended_action == "archive":
-        return f"本周期综合达成率 {_round_metric(completion_rate)}%，建议先归档复盘，再开启下一段旅程。"
+        return f"本周期综合达成率 {_round_metric(completion_rate)}%，建议先归档复盘，再开启下一段旅程"
     if recommended_action == "renew":
-        return f"本周期综合达成率 {_round_metric(completion_rate)}%，节奏稳定，续期会是更稳健的选择。"
-    return f"本周期综合达成率 {_round_metric(completion_rate)}%，状态火热，适合进阶挑战更高规则。"
+        return f"本周期综合达成率 {_round_metric(completion_rate)}%，节奏稳定，续期会是更稳健的选择"
+    return f"本周期综合达成率 {_round_metric(completion_rate)}%，状态火热，适合进阶挑战更高规则"
 
 
 def _aggregate_settlement_totals(
@@ -437,7 +437,7 @@ class HomeService:
                         "period_start": period_start,
                         "period_end": period_end,
                         "title": f"{card['task_name']} / {card['attr_name']} 周期已结束，待结算",
-                        "message": "请前往结算弹窗执行续期、进阶或归档。",
+                        "message": "请前往结算弹窗执行续期、进阶或归档",
                     }
                 )
 

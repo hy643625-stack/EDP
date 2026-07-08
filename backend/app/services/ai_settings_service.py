@@ -209,7 +209,7 @@ class AiSettingsService:
     ) -> dict[str, Any]:
         normalized_mode = mode.strip().lower()
         if normalized_mode not in VALID_AI_MODES:
-            raise ApiError("BAD_REQUEST", "不支持的 AI 模式。", 422)
+            raise ApiError("BAD_REQUEST", "不支持的 AI 模式", 422)
 
         selected_provider_id = provider_id.strip() if isinstance(provider_id, str) and provider_id.strip() else None
         self._validate_mode_provider(normalized_mode, selected_provider_id)
@@ -243,13 +243,13 @@ class AiSettingsService:
         if normalized_mode == "off":
             return {
                 "ok": True,
-                "message": "当前已关闭 AI，系统将仅使用本地规则算法，无需测试模型连接。",
+                "message": "当前已关闭 AI，系统将仅使用本地规则算法，无需测试模型连接",
                 "degraded_to_rules": True,
             }
 
         self._validate_mode_provider(normalized_mode, selected_provider_id)
         if selected_provider_id is None:
-            return {"ok": False, "message": "请先选择 AI 服务商。", "degraded_to_rules": True}
+            return {"ok": False, "message": "请先选择 AI 服务商", "degraded_to_rules": True}
 
         stored = self._load_document()["provider_configs"].get(selected_provider_id, {})
         candidate = self._merge_provider_config(selected_provider_id, stored, config_patch)
@@ -267,7 +267,7 @@ class AiSettingsService:
         except Exception as exc:
             return {
                 "ok": False,
-                "message": f"连接测试失败：{self._format_http_error(exc)}。系统将自动回退到本地规则算法。",
+                "message": f"连接测试失败：{self._format_http_error(exc)}，系统将自动回退到本地规则算法",
                 "degraded_to_rules": True,
             }
 
@@ -371,14 +371,14 @@ class AiSettingsService:
         if mode == "off":
             return
         if provider_id is None:
-            raise ApiError("BAD_REQUEST", "请选择 AI 服务商。", 422)
+            raise ApiError("BAD_REQUEST", "请选择 AI 服务商", 422)
         provider = PROVIDER_INDEX.get(provider_id)
         if provider is None:
             raise ApiError("BAD_REQUEST", f"未知的 AI 服务商：{provider_id}", 422)
         if mode == "cloud" and provider["deployment"] == "local":
-            raise ApiError("BAD_REQUEST", "当前模式需要选择云端 AI 服务商。", 422)
+            raise ApiError("BAD_REQUEST", "当前模式需要选择云端 AI 服务商", 422)
         if mode == "local" and provider["deployment"] != "local":
-            raise ApiError("BAD_REQUEST", "当前模式需要选择本地 AI 服务商。", 422)
+            raise ApiError("BAD_REQUEST", "当前模式需要选择本地 AI 服务商", 422)
 
     def _build_runtime_state(
         self,
@@ -391,14 +391,14 @@ class AiSettingsService:
                 "uses_local_rules": True,
                 "fallback_enabled": False,
                 "status": "rules_only",
-                "message": "当前已关闭 AI，系统将仅使用本地规则算法。",
+                "message": "当前已关闭 AI，系统将仅使用本地规则算法",
             }
         if provider_id is None or provider_id not in PROVIDER_INDEX:
             return {
                 "uses_local_rules": True,
                 "fallback_enabled": True,
                 "status": "fallback",
-                "message": "尚未选择有效 AI 服务商，系统将自动回退到本地规则算法。",
+                "message": "尚未选择有效 AI 服务商，系统将自动回退到本地规则算法",
             }
 
         readiness = self._evaluate_provider_readiness(provider_id, provider_configs.get(provider_id, {}))
@@ -407,15 +407,15 @@ class AiSettingsService:
                 "uses_local_rules": True,
                 "fallback_enabled": True,
                 "status": "fallback",
-                "message": f"{readiness['message']} 系统将自动回退到本地规则算法。",
+                "message": f"{readiness['message']} 系统将自动回退到本地规则算法",
             }
 
         if mode == "auto":
-            message = "自动模式已就绪：优先使用所选 AI，失败时自动回退到本地规则算法。"
+            message = "自动模式已就绪：优先使用所选 AI，失败时自动回退到本地规则算法"
         elif mode == "local":
-            message = "本地模型模式已就绪：优先使用本地 AI，失败时自动回退到本地规则算法。"
+            message = "本地模型模式已就绪：优先使用本地 AI，失败时自动回退到本地规则算法"
         else:
-            message = "云端 AI 模式已就绪：优先使用云端 AI，失败时自动回退到本地规则算法。"
+            message = "云端 AI 模式已就绪：优先使用云端 AI，失败时自动回退到本地规则算法"
         return {
             "uses_local_rules": False,
             "fallback_enabled": True,
@@ -427,12 +427,12 @@ class AiSettingsService:
         provider = PROVIDER_INDEX[provider_id]
         merged = self._build_provider_view(provider_id, config)
         if provider_id not in LOCAL_PROVIDER_IDS and not merged["api_key_configured"]:
-            return {"ready": False, "message": f"{provider['label']} 尚未配置 API Key。"}
+            return {"ready": False, "message": f"{provider['label']} 尚未配置 API Key"}
         if not merged["base_url"].strip():
             field_label = "本地服务地址" if provider["deployment"] == "local" else "API Base URL"
-            return {"ready": False, "message": f"{provider['label']} 尚未填写{field_label}。"}
+            return {"ready": False, "message": f"{provider['label']} 尚未填写{field_label}"}
         if not merged["model_name"].strip():
-            return {"ready": False, "message": f"{provider['label']} 尚未填写模型名称。"}
+            return {"ready": False, "message": f"{provider['label']} 尚未填写模型名称"}
         return {"ready": True, "message": ""}
 
     def _run_connection_test(self, provider_id: str, config: dict[str, Any]) -> dict[str, Any]:
@@ -453,8 +453,8 @@ class AiSettingsService:
                     if isinstance(item, dict)
                 ]
                 if model_name and not any(self._ollama_model_matches(model_name, candidate) for candidate in models):
-                    return {"ok": False, "message": f"已连接到 Ollama，但未找到模型 “{model_name}”。"}
-                return {"ok": True, "message": "本地模型连接测试成功，Ollama 服务可用。"}
+                    return {"ok": False, "message": f"已连接到 Ollama，但未找到模型 {model_name}"}
+                return {"ok": True, "message": "本地模型连接测试成功，Ollama 服务可用"}
 
             headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
             response = client.get(self._join_url(base_url, "/models"), headers=headers)
@@ -466,8 +466,8 @@ class AiSettingsService:
                 if isinstance(item, dict)
             ]
             if model_name and models and model_name not in models:
-                return {"ok": False, "message": f"已连通 {provider['label']}，但未找到模型 “{model_name}”。"}
-            return {"ok": True, "message": f"{provider['label']} 连接测试成功。"}
+                return {"ok": False, "message": f"已连通 {provider['label']}，但未找到模型 {model_name}"}
+            return {"ok": True, "message": f"{provider['label']} 连接测试成功"}
 
     def _encrypt_secret(self, secret: str) -> str:
         if not secret:

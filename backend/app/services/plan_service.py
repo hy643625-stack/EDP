@@ -147,7 +147,7 @@ class PlanService:
         outline, fallback_reason = self._ai_outline(source_text)
         mode_used = "model" if outline else "local_rules"
         if outline is None:
-            warnings.append(f"AI 未参与：{fallback_reason}；当前使用本地规则兜底。")
+            warnings.append(f"AI 未参与：{fallback_reason}；当前使用本地规则兜底")
 
         snapshot = self._build_snapshot(
             source_text=source_text,
@@ -459,7 +459,7 @@ class PlanService:
             phase_start = _add_months(start_day, month_start - 1)
             phase_end = min(end_day, _add_months(start_day, month_end) - timedelta(days=1))
             title = _clean_line(str(ai_phase.get("title") or PHASE_TITLES[phase_index - 1]))
-            objective = _clean_line(str(ai_phase.get("objective") or f"完成第 {month_start} 至 {month_end} 个月的核心能力建设。"), 240)
+            objective = _clean_line(str(ai_phase.get("objective") or f"完成第 {month_start} 至 {month_end} 个月的核心能力建设"), 240)
 
             ai_milestones = ai_phase.get("milestones") if isinstance(ai_phase.get("milestones"), list) else []
             milestone_specs = self._phase_milestones(
@@ -581,7 +581,7 @@ class PlanService:
                     "month_start": month_start,
                     "month_end": month_end,
                     "title": fallback_title,
-                    "objective": "完成本阶段学习与可验证产出。",
+                    "objective": "完成本阶段学习与可验证产出",
                     "topics": [fallback_title],
                 }
             )
@@ -622,7 +622,7 @@ class PlanService:
                 {
                     "goal_id": goal_id,
                     "title": f"第 {week_index} 周：{topic}",
-                    "objective": f"围绕“{topic}”完成学习、实践和一次可检查输出。",
+                    "objective": f"围绕{topic}完成学习、实践和一次可检查输出",
                     "window_start": window_start.isoformat(),
                     "window_end": window_end.isoformat(),
                     "estimated_minutes": len(active_dates) * daily_minutes,
@@ -656,7 +656,7 @@ class PlanService:
                     {
                         "step_id": f"{goal_id}-s{sequence}",
                         "title": f"{action}：{topic}",
-                        "description": "完成后记录实际耗时，并手动勾选完成。",
+                        "description": "记录实际耗时，并手动勾选完成",
                         "scheduled_date": active_day.isoformat(),
                         "due_date": active_day.isoformat(),
                         "estimated_minutes": minutes,
@@ -1002,7 +1002,7 @@ class PlanService:
         )
         summary = (
             f"本周截至今天计划 {planned_steps} 个步骤，已完成 {completed_in_period} 个，"
-            f"实际投入 {_format_duration(actual_seconds)}。"
+            f"实际投入 {_format_duration(actual_seconds)}"
         )
         blocker_parts: list[str] = []
         if blocked_titles:

@@ -12,7 +12,7 @@ from app.services.home_service import HomeService
 
 def _format_rate_text(rate: float | None) -> str:
     if rate is None:
-        return "当前周期未设置明确目标。"
+        return "当前周期未设置明确目标"
     return f"完成率 {round(rate, 1)}%"
 
 
@@ -23,21 +23,21 @@ def _build_signal_lines(report: dict[str, Any]) -> list[str]:
     total_target = report.get("total_target")
 
     if total_target is None:
-        signals.append(f"本周期累计值为 {round(total_actual, 2)}，当前更适合先观察执行节律。")
+        signals.append(f"本周期累计值为 {round(total_actual, 2)}，当前更适合先观察执行节律")
     else:
-        signals.append(f"本周期实际值 {round(total_actual, 2)}，目标值 {round(float(total_target), 2)}。")
+        signals.append(f"本周期实际值 {round(total_actual, 2)}，目标值 {round(float(total_target), 2)}")
         if completion_rate is not None:
             if completion_rate >= 100:
-                signals.append("当前节律已经达到或超过目标，可以考虑提高挑战强度。")
+                signals.append("当前节律已经达到或超过目标，可以考虑提高挑战强度")
             elif completion_rate >= 70:
-                signals.append("执行节律整体稳定，优先保持当前动作链路。")
+                signals.append("执行节律整体稳定，优先保持当前动作链路")
             else:
-                signals.append("执行偏差较明显，建议先降低阻力，再决定是否续期。")
+                signals.append("执行偏差较明显，建议先降低阻力，再决定是否续期")
 
     period_start = report.get("period_start")
     period_end = report.get("period_end")
     if period_start and period_end:
-        signals.append(f"复盘区间：{period_start} 至 {period_end}。")
+        signals.append(f"复盘区间：{period_start} 至 {period_end}")
 
     recommendation_reason = str(report.get("recommendation_reason") or "").strip()
     if recommendation_reason:
@@ -52,22 +52,22 @@ def _build_action_items(report: dict[str, Any]) -> list[str]:
 
     if action == "archive":
         return [
-            f"先归档 {attr_name} 当前周期，避免继续积累未完成压力。",
-            "回看本周期失败片段，确认是目标过高还是执行频率不匹配。",
-            "如果它仍然重要，再以更小目标重新开启下一周期。",
+            f"先归档 {attr_name} 当前周期，避免继续积累未完成压力",
+            "回看本周期失败片段，确认是目标过高还是执行频率不匹配",
+            "如果它仍然重要，再以更小目标重新开启下一周期",
         ]
 
     if action == "evolve":
         return [
-            f"为 {attr_name} 设置更高一级的目标，或增加结果型指标。",
-            "保留当前有效动作，不要一次性同时修改太多规则。",
-            "下一周期优先验证提升后的目标是否仍能稳定完成。",
+            f"为 {attr_name} 设置更高一级的目标，或增加结果型指标",
+            "保留当前有效动作，不要一次性同时修改太多规则",
+            "下一周期优先验证提升后的目标是否仍能稳定完成",
         ]
 
     return [
-        f"按当前规则继续推进 {attr_name}，保留已验证有效的执行节律。",
-        "如果下一周期仍有波动，优先调整目标值或记录频率，而不是直接放弃。",
-        "所有 AI 建议都应先由用户确认，再决定是否修改数据或配置。",
+        f"按当前规则继续推进 {attr_name}，保留已验证有效的执行节律",
+        "如果下一周期仍有波动，优先调整目标值或记录频率，而不是直接放弃",
+        "所有 AI 建议都应先由用户确认，再决定是否修改数据或配置",
     ]
 
 
@@ -114,13 +114,13 @@ class AiSummaryService:
             try:
                 model_summary = self._generate_model_summary(report, runtime_provider)
             except Exception as exc:
-                fallback_reason = f"{self._format_model_error(exc)}，已按配置策略自动降级到本地规则算法。"
+                fallback_reason = f"{self._format_model_error(exc)}，已按配置策略自动降级到本地规则算法"
             else:
                 mode_used = "model"
                 summary_text = model_summary["summary_text"]
                 sections = model_summary["sections"]
         elif not execution_plan["uses_local_rules"]:
-            fallback_reason = "当前 AI 配置尚未就绪，已按配置策略自动降级到本地规则算法。"
+            fallback_reason = "当前 AI 配置尚未就绪，已按配置策略自动降级到本地规则算法"
 
         return {
             "task_id": report["task_id"],
