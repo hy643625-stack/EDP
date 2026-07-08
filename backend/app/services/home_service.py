@@ -7,6 +7,7 @@ from typing import Any
 from app.errors import ApiError
 from app.repositories.home_repository import HomeRepository
 from app.repositories.task_repository import TaskRepository
+from app.repositories.time_ledger_repository import TimeLedgerRepository
 
 DEFAULT_UX_CONFIG = {"input_type": "number", "quick_step": 1, "detail_enabled": True}
 ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
@@ -315,9 +316,15 @@ def _aggregate_settlement_totals(
 
 
 class HomeService:
-    def __init__(self, repo: HomeRepository, task_repo: TaskRepository) -> None:
+    def __init__(
+        self,
+        repo: HomeRepository,
+        task_repo: TaskRepository,
+        time_repo: TimeLedgerRepository | None = None,
+    ) -> None:
         self.repo = repo
         self.task_repo = task_repo
+        self.time_repo = time_repo or TimeLedgerRepository(repo.db)
 
     def command_center(self, record_date: str, task_ids_raw: str | None) -> dict:
         target_day = _parse_date_or_raise(record_date)
@@ -701,15 +708,24 @@ class HomeService:
                     timer_attr_id = int(item["attr_id"])
                     break
 
-        result = self.repo.apply_focus_capture(
+        recorded = self.time_repo.record_session(
             task_id=task_id,
-            timer_attr_id=timer_attr_id,
-            focus_attr_id=focus_attr_id,
+            attr_id=timer_attr_id,
             start_time=parsed_start_time.isoformat(),
-            duration_seconds=duration_seconds,
             record_date=record_day.isoformat(),
+            duration_seconds=duration_seconds,
+            source_type="task_attr" if timer_attr_id is not None else "task",
         )
-        return result
+        return {
+            "task_id": task_id,
+            "timer_attr_id": timer_attr_id,
+            "focus_attr_id": focus_attr_id,
+            "record_date": record_day.isoformat(),
+            "duration_seconds": duration_seconds,
+            "focus_session_id": recorded["id"],
+            "timer_attr_value_today": recorded["attr_value_today"],
+            "focus_attr_value_today": recorded["focus_attr_value_today"],
+        }
 
     def batch_upsert_records(self, record_date: str, entries: list[dict]) -> dict:
         target_day = _parse_date_or_raise(record_date)

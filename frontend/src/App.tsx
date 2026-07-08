@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlarmClock, BarChart3, Bot, ChevronDown, ListChecks, ListTodo, PencilLine, Plus, Settings2, Trash2, Trophy, X } from 'lucide-react'
+import { AlarmClock, BarChart3, Bot, ChevronDown, ListChecks, ListTodo, PencilLine, Plus, Route, Settings2, Trash2, Trophy, X } from 'lucide-react'
 import dayjs from 'dayjs'
 
 import { api } from '@/api/client'
@@ -32,11 +32,12 @@ import { CreateTaskModal } from '@/features/overview/CreateTaskModal'
 import { DEFAULT_TASK_COLOR } from '@/features/overview/taskColorPresets'
 import { AiSettingsModal, type AiProviderConfigDraft } from '@/features/settings/AiSettingsModal'
 import { LearningStudioTab } from '@/features/learning/LearningStudioTab'
+import { PlansTab, type PlanTimeContext } from '@/features/plans/PlansTab'
 import { StatsTab } from '@/features/stats/StatsTab'
 import { TimeTab } from '@/features/time/TimeTab'
 import { TodosTab } from '@/features/todos/TodosTab'
 
-type TabKey = 'records' | 'todos' | 'time' | 'stats' | 'learning' | 'contest'
+type TabKey = 'records' | 'todos' | 'time' | 'stats' | 'plans' | 'learning' | 'contest'
 type TimerMode = 'countup' | 'countdown'
 
 const tabs: Array<SegmentedTabItem<TabKey>> = [
@@ -44,6 +45,7 @@ const tabs: Array<SegmentedTabItem<TabKey>> = [
   { key: 'todos', label: 'Todos', icon: ListTodo },
   { key: 'time', label: 'Time', icon: AlarmClock },
   { key: 'stats', label: 'Stats', icon: BarChart3 },
+  { key: 'plans', label: 'Plans', icon: Route },
   { key: 'learning', label: 'Learning', icon: Bot },
   { key: 'contest', label: 'Contest', icon: Trophy }
 ]
@@ -279,6 +281,8 @@ function App() {
   const [timerElapsed, setTimerElapsed] = useState(0)
   const [timerRemain, setTimerRemain] = useState(0)
   const [timerMessage, setTimerMessage] = useState('')
+  const [timeTimerAttrId, setTimeTimerAttrId] = useState<number | null>(null)
+  const [timePlanContext, setTimePlanContext] = useState<PlanTimeContext | null>(null)
   const timerHandleRef = useRef<number | null>(null)
   const timerStartMsRef = useRef<number>(0)
   const timerStartIsoRef = useRef<string>('')
@@ -545,7 +549,7 @@ function App() {
       }
     })
     setAiStatusMessage('')
-    setAiTestMessage('保存设置后会清空当前已保存的 API Key。')
+    setAiTestMessage('保存设置后会清空当前已保存的 API Key')
   }
 
   function buildAiProviderConfigInput(providerId: string): AiProviderConfigInput {
@@ -575,7 +579,7 @@ function App() {
         )
       })
       hydrateAiSettings(payload)
-      setAiStatusMessage('AI 设置已保存。所有 AI 功能仍需用户确认后才会真正写入数据。')
+      setAiStatusMessage('AI 设置已保存所有 AI 功能仍需用户确认后才会真正写入数据')
       clearError()
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e)
@@ -1305,8 +1309,13 @@ function App() {
         const snapshot = await core.createFocusSessionAndRefresh({
           payload: {
             task_id: currentTaskId,
+            attr_id: timeTimerAttrId ?? undefined,
             start_time: timerStartIsoRef.current,
-            duration_seconds: durationSeconds
+            record_date: dayjs(timerStartMsRef.current).format('YYYY-MM-DD'),
+            duration_seconds: durationSeconds,
+            plan_id: timePlanContext?.planId,
+            step_id: timePlanContext?.stepId,
+            note: timePlanContext?.stepTitle
           },
           ...buildScopedRefreshInput(timeScopeTaskId, 'time')
         })
@@ -1327,8 +1336,15 @@ function App() {
     }
   }
 
-  async function handleCreateManualFocusSession(input: { taskId: number; startTime: string; durationSeconds: number }) {
-    const { taskId, startTime, durationSeconds } = input
+  async function handleCreateManualFocusSession(input: {
+    taskId: number
+    attrId?: number
+    startTime: string
+    recordDate: string
+    durationSeconds: number
+    planContext?: PlanTimeContext | null
+  }) {
+    const { taskId, attrId, startTime, recordDate, durationSeconds, planContext } = input
     if (taskId <= 1) {
       showError('请选择具体任务后再补记')
       return
@@ -1337,8 +1353,13 @@ function App() {
       const snapshot = await core.createFocusSessionAndRefresh({
         payload: {
           task_id: taskId,
+          attr_id: attrId,
           start_time: startTime,
-          duration_seconds: Math.max(1, Math.round(durationSeconds))
+          record_date: recordDate,
+          duration_seconds: Math.max(1, Math.round(durationSeconds)),
+          plan_id: planContext?.planId,
+          step_id: planContext?.stepId,
+          note: planContext?.stepTitle
         },
         ...buildScopedRefreshInput(timeScopeTaskId, 'time')
       })
@@ -1347,6 +1368,30 @@ function App() {
       await loadHomeSnapshot(recordsDate, homeSelectedTaskIds)
       logAction('focus.manual', { taskId, durationSeconds: Math.max(1, Math.round(durationSeconds)) })
     })
+  }
+
+  function openPlanStepInTime(context: PlanTimeContext) {
+    if (timerRunning) {
+      showError('已有计时正在运行，请先在 Time 页面结束当前计时')
+      setActiveTab('time')
+      return
+    }
+    setTimeScopeTaskId(context.taskId)
+    setTimeTimerAttrId(context.attrId)
+    setTimePlanContext(context)
+    setActiveTab('time')
+  }
+
+  function openTaskAttrInTime(taskId: number, attrId?: number) {
+    if (timerRunning) {
+      showError('已有计时正在运行，请先在 Time 页面结束当前计时')
+      setActiveTab('time')
+      return
+    }
+    setTimeScopeTaskId(taskId)
+    setTimeTimerAttrId(attrId ?? null)
+    setTimePlanContext(null)
+    setActiveTab('time')
   }
 
   return (
@@ -1380,6 +1425,13 @@ function App() {
       <nav className="mb-5">
         <SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />
       </nav>
+
+      {timerRunning && activeTab !== 'time' ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-l-4 border-[var(--edp-brand)] bg-white px-4 py-3 shadow-sm">
+          <div><p className="text-sm font-semibold text-slate-900">{timePlanContext?.stepTitle || currentTaskName || '专注计时'}</p><p className="mt-1 text-xs text-slate-500">统一计时器正在运行 · {displayClock(timerMode === 'countdown' ? timerRemain : timerElapsed)}</p></div>
+          <Button size="sm" variant="ghost" iconLeft={<AlarmClock className="h-4 w-4" />} onClick={() => setActiveTab('time')}>返回 Time</Button>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -1422,6 +1474,7 @@ function App() {
             onOpenProjectManager={() => {
               void openProjectManager()
             }}
+            onOpenTime={openTaskAttrInTime}
           />
         ) : null}
 
@@ -1455,10 +1508,19 @@ function App() {
             isGlobalScope={currentTaskId === 1}
             currentTaskId={currentTaskId}
             tasks={tasks}
+            attrs={attrs}
             scopeTaskId={timeScopeTaskId}
+            timerAttrId={timeTimerAttrId}
+            planContext={timePlanContext}
             currentTaskName={currentTaskName}
             focusSessions={focusSessions}
-            onScopeTaskIdChange={setTimeScopeTaskId}
+            onScopeTaskIdChange={(taskId) => {
+              setTimeScopeTaskId(taskId)
+              setTimeTimerAttrId(null)
+              setTimePlanContext(null)
+            }}
+            onTimerAttrIdChange={setTimeTimerAttrId}
+            onClearPlanContext={() => setTimePlanContext(null)}
             onTimerModeChange={setTimerMode}
             onCountdownMinutesChange={setCountdownMinutes}
             onStartTimer={startTimer}
@@ -1485,6 +1547,16 @@ function App() {
         {activeTab === 'learning' ? (
           <LearningStudioTab onOpenAiSettings={() => void openAiSettings()} />
         ) : null}
+        {activeTab === 'plans' ? (
+          <PlansTab
+            tasks={tasks}
+            onOpenTime={openPlanStepInTime}
+            onTasksChanged={async (taskId) => {
+              await reloadTasksFromServer(taskId)
+              await loadHomeSnapshot(recordsDate, homeSelectedTaskIds)
+            }}
+          />
+        ) : null}
         {activeTab === 'contest' ? (
           <ContestTab />
         ) : null}
@@ -1507,7 +1579,7 @@ function App() {
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">项目管理</h3>
-                <p className="mt-1 text-xs text-slate-500">任务与属性管理已下沉到这里，不再占用主流程。</p>
+                <p className="mt-1 text-xs text-slate-500">任务与属性管理已下沉到这里，不再占用主流程</p>
               </div>
               <Button
                 variant="ghost"
@@ -1529,7 +1601,7 @@ function App() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold text-slate-600">任务</p>
-                    <p className="mt-1 text-[11px] text-slate-500">默认折叠，先看全量标签预览，展开后再做增删改。</p>
+                    <p className="mt-1 text-[11px] text-slate-500">默认折叠，先看全量标签预览，展开后再做增删改</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">
@@ -1648,7 +1720,7 @@ function App() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold text-slate-600">属性</p>
-                    <p className="mt-1 text-[11px] text-slate-500">默认折叠为标签预览，展开后进行属性配置与编辑。</p>
+                    <p className="mt-1 text-[11px] text-slate-500">默认折叠为标签预览，展开后进行属性配置与编辑</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">

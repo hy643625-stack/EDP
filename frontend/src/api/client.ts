@@ -19,6 +19,10 @@ import type {
   LearningSessionSummary,
   LearningTutorResponse,
   LearningWorkbenchPayload,
+  PlanDashboard,
+  PlanDetail,
+  PlanReview,
+  PlanSummary,
   SettlementReport,
   Task,
   TaskAttrRelation,
@@ -226,7 +230,16 @@ export const api = {
       { retries: REQUEST_RETRY_COUNT }
     ),
 
-  createFocusSession: (payload: { task_id: number; start_time: string; duration_seconds: number }) =>
+  createFocusSession: (payload: {
+    task_id: number
+    attr_id?: number
+    start_time: string
+    record_date?: string
+    duration_seconds: number
+    plan_id?: string
+    step_id?: string
+    note?: string
+  }) =>
     unwrap<FocusSession>(() => http.post('/v1/focus/sessions', payload)),
   listFocusSessions: (params?: { task_id?: number; start_date?: string; end_date?: string }) =>
     unwrap<FocusSession[]>(() => http.get('/v1/focus/sessions', { params }), { retries: REQUEST_RETRY_COUNT }),
@@ -294,6 +307,56 @@ export const api = {
   ,
   getAiSummary: (payload: { task_id: number; attr_id: number; record_date: string }) =>
     unwrap<AiSummaryPayload>(() => http.post('/v1/ai/summary', payload)),
+
+  listPlans: () => unwrap<PlanSummary[]>(() => http.get('/v1/plans'), { retries: REQUEST_RETRY_COUNT }),
+  getPlan: (planId: string, date?: string) =>
+    unwrap<PlanDetail>(() => http.get(`/v1/plans/${planId}`, { params: { date } }), { retries: REQUEST_RETRY_COUNT }),
+  getPlanDashboard: (date: string, planId?: string) =>
+    unwrap<PlanDashboard>(() => http.get('/v1/plans/dashboard', { params: { date, plan_id: planId } }), { retries: REQUEST_RETRY_COUNT }),
+  importPlan: (payload: {
+    source_text: string
+    title?: string
+    goal?: string
+    start_date: string
+    target_end_date: string
+    preferred_weekdays: number[]
+    daily_minutes: number
+    task_binding: {
+      mode: 'create' | 'existing'
+      task_name?: string
+      task_id?: number
+    }
+  }) => unwrap<PlanDetail>(() => http.post('/v1/plans/import', payload)),
+  updatePlanDraft: (planId: string, snapshot: PlanDetail['snapshot']) =>
+    unwrap<PlanDetail>(() => http.put(`/v1/plans/${planId}/draft`, { snapshot })),
+  activatePlan: (planId: string) => unwrap<PlanDetail>(() => http.post(`/v1/plans/${planId}/activate`)),
+  updatePlanStatus: (planId: string, status: 'active' | 'completed' | 'archived') =>
+    unwrap<PlanDetail>(() => http.patch(`/v1/plans/${planId}/status`, { status })),
+  addPlanTimeLog: (planId: string, payload: {
+    step_id: string
+    start_time: string
+    duration_seconds: number
+    source: 'timer' | 'manual'
+    note?: string
+  }) => unwrap<{ time_log: unknown; plan: PlanDetail }>(() => http.post(`/v1/plans/${planId}/time-logs`, payload)),
+  completePlanStep: (planId: string, stepId: string, payload: {
+    actual_minutes?: number
+    time_note?: string
+    evidence_text?: string
+    evidence_url?: string
+  }) => unwrap<{ step_state: unknown; plan: PlanDetail }>(() => http.post(`/v1/plans/${planId}/steps/${stepId}/complete`, payload)),
+  reopenPlanStep: (planId: string, stepId: string) =>
+    unwrap<{ step_state: unknown; plan: PlanDetail }>(() => http.post(`/v1/plans/${planId}/steps/${stepId}/reopen`)),
+  createPlanReview: (planId: string, payload: {
+    review_date: string
+    summary?: string
+    blockers?: string
+    next_week_minutes?: number
+  }) => unwrap<PlanReview>(() => http.post(`/v1/plans/${planId}/reviews`, payload)),
+  applyPlanReview: (planId: string, reviewId: number) =>
+    unwrap<{ revision: number; plan: PlanDetail }>(() => http.post(`/v1/plans/${planId}/reviews/${reviewId}/apply`)),
+  rejectPlanReview: (planId: string, reviewId: number) =>
+    unwrap<{ review_id: number; status: 'rejected' }>(() => http.post(`/v1/plans/${planId}/reviews/${reviewId}/reject`)),
 
   getLearningWorkbench: () =>
     unwrap<LearningWorkbenchPayload>(() => http.get('/v1/learning/workbench'), { retries: REQUEST_RETRY_COUNT }),

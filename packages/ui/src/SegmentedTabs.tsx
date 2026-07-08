@@ -1,4 +1,4 @@
-import { type ComponentType } from 'react'
+import { type ComponentType, useEffect, useRef } from 'react'
 
 import { cn } from './cn'
 
@@ -23,8 +23,19 @@ export function SegmentedTabs<T extends string>({
   className,
   compact = false
 }: SegmentedTabsProps<T>) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const activeRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    const activeButton = activeRef.current
+    if (!container || !activeButton) return
+    const nextLeft = activeButton.offsetLeft - (container.clientWidth - activeButton.clientWidth) / 2
+    container.scrollTo({ left: Math.max(0, nextLeft), behavior: 'smooth' })
+  }, [value])
+
   return (
-    <div className={cn('mobile-scroll-x rounded-2xl border border-slate-200/80 bg-white/90 px-2', className)}>
+    <div ref={containerRef} className={cn('mobile-scroll-x rounded-2xl border border-slate-200/80 bg-white/90 px-2', className)}>
       <ul className="flex min-w-max items-center gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon
@@ -32,6 +43,7 @@ export function SegmentedTabs<T extends string>({
           return (
             <li key={tab.key}>
               <button
+                ref={active ? activeRef : undefined}
                 type="button"
                 onClick={() => onChange(tab.key)}
                 className={cn(

@@ -319,8 +319,8 @@ export function ContestTab() {
                 <div>
                   <p className="text-xs font-medium text-amber-700">AI 验题不可用</p>
                   <p className="text-xs text-amber-600 mt-0.5">
-                    尚未配置 AI 服务商，无法自动生成标签、学习价值和前置知识。
-                    请在「AI 设置」中配置后再导入题目。
+                    尚未配置 AI 服务商，无法自动生成标签、学习价值和前置知识
+                    请在「AI 设置」中配置后再导入题目
                   </p>
                 </div>
               </div>
@@ -543,7 +543,7 @@ export function ContestTab() {
                       </div>
                     ) : (
                       hackResult.ok && !hackResult.error ? (
-                        <p className="mt-1 text-xs text-slate-500">对拍 {String(hackResult.round_count)} 轮未发现反例，代码可能在小数据范围内正确。建议扩大测试规模或检查 I/O 格式。</p>
+                        <p className="mt-1 text-xs text-slate-500">对拍 {String(hackResult.round_count)} 轮未发现反例，代码可能在小数据范围内正确建议扩大测试规模或检查 I/O 格式</p>
                       ) : null
                     )}
                   </div>

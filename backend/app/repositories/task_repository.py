@@ -28,6 +28,13 @@ class TaskRepository:
             ).fetchone()
             return row is not None
 
+    def task_has_plan(self, task_id: int) -> bool:
+        with self.db.session() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM plans WHERE task_id = ? LIMIT 1", (task_id,)
+            ).fetchone()
+            return row is not None
+
     def create_task(self, name: str, desc: str, color: str) -> dict:
         with self.db.session() as conn:
             cur = conn.execute(

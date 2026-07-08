@@ -996,7 +996,7 @@ export function StatsTab({
                 AI 复盘
               </CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                先提供任务级属性复盘入口。选择一个属性后，即可基于当前日期生成 AI 建议。
+                先提供任务级属性复盘入口选择一个属性后，即可基于当前日期生成 AI 建议
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1105,11 +1105,11 @@ export function StatsTab({
 
                 <p className="text-xs text-slate-500">
                   {aiSummary.runtime_message}
-                  {aiSummary.confirmation_required ? ' 所有 AI 建议都需要你确认后才会进入真实数据。' : ''}
+                  {aiSummary.confirmation_required ? ' 所有 AI 建议都需要你确认后才会进入真实数据' : ''}
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">选中一个属性后生成 AI 复盘，这里会显示总结、信号和下一步建议。</p>
+              <p className="text-sm text-slate-400">选中一个属性后生成 AI 复盘，这里会显示总结、信号和下一步建议</p>
             )}
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
@@ -1125,7 +1125,7 @@ export function StatsTab({
                 </button>
               </div>
               {aiHistory.length === 0 ? (
-                <p className="mt-2 text-xs text-slate-400">还没有历史记录。生成一次 AI 复盘后会自动保存到本地。</p>
+                <p className="mt-2 text-xs text-slate-400">还没有历史记录生成一次 AI 复盘后会自动保存到本地</p>
               ) : (
                 <ul className="mt-2 space-y-2">
                   {aiHistory.slice(0, 6).map((item) => (
@@ -1176,11 +1176,11 @@ export function StatsTab({
         <Card className="lg:col-span-12">
           <CardHeader>
             <CardTitle>🎓 过往里程碑 (Archived Goals)</CardTitle>
-            <p className="mt-1 text-xs text-slate-500">仅展示已归档属性的生命周期结果，作为长期积累的荣誉记录。</p>
+            <p className="mt-1 text-xs text-slate-500">仅展示已归档属性的生命周期结果，作为长期积累的荣誉记录</p>
           </CardHeader>
           <CardContent>
             {archivedMilestones.length === 0 ? (
-              <p className="text-sm text-slate-400">暂无归档里程碑。</p>
+              <p className="text-sm text-slate-400">暂无归档里程碑</p>
             ) : (
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {archivedMilestones.map((item) => (

@@ -64,8 +64,14 @@ export interface FocusSession {
   task_id: number
   task_name: string | null
   task_color: string | null
+  attr_id?: number | null
+  attr_name?: string | null
   start_time: string
+  record_date?: string | null
   duration_seconds: number
+  source_type?: string
+  source_id?: string | null
+  note?: string
   created_at: string
 }
 
@@ -504,4 +510,186 @@ export interface LearningTutorResponse {
   }>
   source_refs: string[]
   confidence: number
+}
+
+export type PlanStatus = 'draft' | 'active' | 'completed' | 'archived'
+export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'blocked'
+
+export interface PlanSummary {
+  id: string
+  title: string
+  goal: string
+  start_date: string
+  target_end_date: string
+  preferred_weekdays: number[]
+  daily_minutes: number
+  task_binding_mode: 'create' | 'existing'
+  task_name_draft: string
+  task_id: number | null
+  task_name?: string | null
+  owns_task: boolean
+  status: PlanStatus
+  active_revision: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanStep {
+  step_id: string
+  title: string
+  description: string
+  scheduled_date: string
+  due_date: string
+  estimated_minutes: number
+  progress_weight: number
+  dependencies: string[]
+  status?: PlanStepStatus
+  completed_at?: string | null
+  actual_seconds?: number
+  task_id?: number | null
+  timer_attr_id?: number | null
+}
+
+export interface PlanWeeklyGoal {
+  goal_id: string
+  title: string
+  objective: string
+  window_start: string
+  window_end: string
+  estimated_minutes: number
+  progress_weight: number
+  expanded: boolean
+  steps: PlanStep[]
+  timer_attr_id?: number | null
+  actual_seconds?: number
+}
+
+export interface PlanMilestone {
+  milestone_id: string
+  title: string
+  objective: string
+  start_date: string
+  end_date: string
+  estimated_minutes: number
+  weekly_goals: PlanWeeklyGoal[]
+}
+
+export interface PlanPhase {
+  phase_id: string
+  title: string
+  objective: string
+  start_date: string
+  end_date: string
+  estimated_minutes: number
+  milestones: PlanMilestone[]
+}
+
+export interface PlanSnapshot {
+  schema_version: number
+  generated_at: string
+  horizon_end: string
+  phases: PlanPhase[]
+  generation?: {
+    mode_used: 'local_rules' | 'model'
+    fallback_reason?: string | null
+  }
+  warnings?: string[]
+}
+
+export interface PlanProgressPhase {
+  phase_id: string
+  title: string
+  estimated_minutes: number
+  completed_minutes: number
+  total_task_weight: number
+  completed_task_weight: number
+  completed_steps: number
+  total_steps: number
+  completion_rate: number
+  workload_completion_rate: number
+  actual_seconds: number
+}
+
+export interface PlanProgress {
+  estimated_minutes: number
+  completed_minutes: number
+  total_task_weight: number
+  completed_task_weight: number
+  completed_steps: number
+  total_steps: number
+  completion_rate: number
+  workload_completion_rate: number
+  actual_seconds: number
+  phases: PlanProgressPhase[]
+}
+
+export interface PlanReviewStatus {
+  due: boolean
+  reasons: Array<'week_end' | 'coverage_low'>
+  reviewed_this_week: boolean
+  pending_review_id: number | null
+  detailed_until: string | null
+  detailed_days_remaining: number
+  prefill: {
+    period_start: string
+    period_end: string
+    planned_steps: number
+    completed_steps: number
+    overdue_steps: number
+    blocked_steps: number
+    actual_seconds: number
+    summary: string
+    blockers: string
+    next_week_minutes: number
+  }
+}
+
+export interface PlanReview {
+  id: number
+  plan_id: string
+  base_revision: number
+  status: 'pending' | 'applied' | 'rejected'
+  review_input: {
+    review_date: string
+    summary: string
+    blockers: string
+    next_week_minutes: number
+  }
+  proposal: {
+    snapshot: PlanSnapshot
+    changes: Array<{
+      type: 'moved' | 'expanded' | 'added' | 'cancelled' | 'split' | 'capacity_conflict'
+      item_id: string
+      title: string
+      from?: string
+      to?: string
+    }>
+  }
+  created_at: string
+  applied_at: string | null
+}
+
+export interface PlanDetail {
+  plan: PlanSummary
+  snapshot: PlanSnapshot
+  progress: PlanProgress
+  review_status: PlanReviewStatus
+  revisions: Array<{ id: number; plan_id: string; version: number; reason: string; created_at: string }>
+  reviews: PlanReview[]
+  mode_used?: 'local_rules' | 'model'
+  fallback_reason?: string | null
+  warnings?: string[]
+}
+
+export interface PlanDashboardStep extends PlanStep {
+  plan_id: string
+  plan_title: string
+}
+
+export interface PlanDashboard {
+  date: string
+  plans: Array<{ plan: PlanSummary; progress: PlanProgress; review_status: PlanReviewStatus }>
+  overdue: PlanDashboardStep[]
+  today: PlanDashboardStep[]
+  upcoming: PlanDashboardStep[]
 }

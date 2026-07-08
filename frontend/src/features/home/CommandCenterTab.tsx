@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, Pause, Play, RefreshCw, Save, Settings2, Sparkles } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, Pause, Play, RefreshCw, Save, Settings2, Sparkles, X } from 'lucide-react'
 
 import {
   buildAiSummaryClipboardText,
@@ -49,6 +49,7 @@ type CommandCenterTabProps = {
   onApplySettlementAction: (input: { taskId: number; attrId: number; action: 'renew' | 'archive' }) => Promise<void>
   onEvolvePending: (taskId: number, attrId: number) => void
   onOpenProjectManager: () => void
+  onOpenTime: (taskId: number, attrId?: number) => void
 }
 
 type TaskSwimlane = {
@@ -345,7 +346,8 @@ export function CommandCenterTab({
   onFocusCapture,
   onApplySettlementAction,
   onEvolvePending,
-  onOpenProjectManager
+  onOpenProjectManager,
+  onOpenTime
 }: CommandCenterTabProps) {
   const [draftValues, setDraftValues] = useState<Record<string, number | null>>({})
   const [inboxExpanded, setInboxExpanded] = useState(false)
@@ -927,7 +929,7 @@ export function CommandCenterTab({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <CardTitle>今日指挥中心</CardTitle>
-              <p className="mt-1 text-xs text-slate-500">全局查看今天要处理的所有属性，任务仅作为筛选标签。</p>
+              <p className="mt-1 text-xs text-slate-500">全局查看今天要处理的所有属性，任务仅作为筛选标签</p>
             </div>
             <Button variant="ghost" size="sm" iconLeft={<Settings2 className="h-4 w-4" />} onClick={onOpenProjectManager}>
               项目管理
@@ -987,7 +989,7 @@ export function CommandCenterTab({
         </CardHeader>
         <CardContent>
           {pendingCards.length === 0 ? (
-            <p className="text-sm text-slate-400">当前没有待结算周期，继续保持今天的节奏。</p>
+            <p className="text-sm text-slate-400">当前没有待结算周期，继续保持今天的节奏</p>
           ) : (
             <ul className="space-y-3">
               {pendingCards.map((card) => (
@@ -1047,7 +1049,7 @@ export function CommandCenterTab({
           {loading ? (
             <p className="text-sm text-slate-500">正在加载指挥中心数据...</p>
           ) : cards.length === 0 ? (
-            <p className="text-sm text-slate-400">当前筛选下没有可记录属性。</p>
+            <p className="text-sm text-slate-400">当前筛选下没有可记录属性</p>
           ) : (
             <div className="space-y-8">
               {swimlanes.map((lane) => {
@@ -1121,7 +1123,7 @@ export function CommandCenterTab({
                                   <Check className="h-5 w-5" />
                                 </button>
                               ) : inputType === 'timer' ? (
-                                <Button size="sm" className="h-10" iconLeft={<Play className="h-4 w-4" />} onClick={() => openFocusSheet(card, 'timer')}>
+                                <Button size="sm" className="h-10" iconLeft={<Play className="h-4 w-4" />} onClick={() => onOpenTime(card.task_id, card.attr_id)}>
                                   开始专注
                                 </Button>
                               ) : (
@@ -1201,7 +1203,7 @@ export function CommandCenterTab({
         {inboxExpanded ? (
           <CardContent>
             {inboxEvents.length === 0 ? (
-              <p className="text-sm text-slate-400">暂无跨任务事件。</p>
+              <p className="text-sm text-slate-400">暂无跨任务事件</p>
             ) : (
               <ul className="space-y-2">
                 {inboxEvents.map((event) => (
@@ -1273,7 +1275,7 @@ export function CommandCenterTab({
               ) : null}
 
               {focusSheetTimerCards.length === 0 ? (
-                <p className="mt-2 text-xs text-slate-500">当前任务没有 timer 属性，可先在项目管理中新增计时属性。</p>
+                <p className="mt-2 text-xs text-slate-500">当前任务没有 timer 属性，可先在项目管理中新增计时属性</p>
               ) : (
                 <div className="mt-3 space-y-3">
                   <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white p-1">
@@ -1317,29 +1319,10 @@ export function CommandCenterTab({
                     {focusTimerMode === 'countdown' ? formatClock(focusTimerRemain) : formatClock(focusTimerElapsed)}
                   </p>
 
-                  <div className="flex items-center gap-2">
-                    {focusTimerRunning ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        iconLeft={<Pause className="h-4 w-4" />}
-                        disabled={focusTimerSaving}
-                        onClick={() => void stopFocusTimer(true)}
-                      >
-                        停止并记录
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        iconLeft={<Play className="h-4 w-4" />}
-                        disabled={focusTimerSaving}
-                        onClick={() => void startFocusTimer()}
-                      >
-                        开始专注
-                      </Button>
-                    )}
-                    <span className="text-xs text-slate-500">结束后将写入 timer 属性和“专注时长”</span>
-                  </div>
+                  <div className="flex items-center gap-2"><Button size="sm" iconLeft={<Play className="h-4 w-4" />} onClick={() => {
+                    onOpenTime(focusSheet.task_id, focusTimerAttrId ?? undefined)
+                    void closeFocusSheet()
+                  }}>前往 Time 计时</Button><span className="text-xs text-slate-500">计时统一在 Time 页面完成</span></div>
 
                   {focusTimerMessage ? <p className="text-xs text-[var(--edp-brand-strong)]">{focusTimerMessage}</p> : null}
                 </div>
@@ -1361,7 +1344,7 @@ export function CommandCenterTab({
               </div>
 
               {focusSheetEditableCards.length === 0 ? (
-                <p className="text-xs text-slate-500">当前任务没有 number/boolean 属性可填写。</p>
+                <p className="text-xs text-slate-500">当前任务没有 number/boolean 属性可填写</p>
               ) : (
                 <ul className="space-y-2">
                   {focusSheetEditableCards.map((card) => {
@@ -1440,8 +1423,21 @@ export function CommandCenterTab({
       ) : null}
 
       {settlementTarget ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-4">
-          <div className="settlement-modal w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:p-5">
+        <div
+          className="fixed inset-0 z-[70] flex items-start sm:items-center justify-center bg-slate-900/35 p-4"
+          onClick={() => {
+            if (settlementActionLoading != null) return
+            setSettlementTarget(null)
+            setSettlementReport(null)
+            setAiSummary(null)
+            setAiSummaryError('')
+            setSettlementLoadError('')
+          }}
+        >
+          <div
+            className="settlement-modal w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-slate-900">属性结算仪式</p>
@@ -1449,9 +1445,9 @@ export function CommandCenterTab({
                   {settlementTarget.task_name} · {settlementTarget.attr_name}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                 onClick={() => {
                   setSettlementTarget(null)
                   setSettlementReport(null)
@@ -1461,8 +1457,8 @@ export function CommandCenterTab({
                 }}
                 disabled={settlementActionLoading != null}
               >
-                关闭
-              </Button>
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             {settlementLoading ? (
@@ -1503,7 +1499,7 @@ export function CommandCenterTab({
                         AI 复盘建议
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        先给建议，不自动改库；真实修改仍然以你的确认和结算动作为准。
+                        先给建议，不自动改库；真实修改仍然以你的确认和结算动作为准
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1600,11 +1596,11 @@ export function CommandCenterTab({
 
                       <p className="text-[11px] text-slate-500">
                         {aiSummary.runtime_message}
-                        {aiSummary.confirmation_required ? ' 所有 AI 建议都需要你确认后才会进入真实数据。' : ''}
+                        {aiSummary.confirmation_required ? ' 所有 AI 建议都需要你确认后才会进入真实数据' : ''}
                       </p>
                     </div>
                   ) : (
-                    <p className="mt-3 text-sm text-slate-400">暂未生成 AI 复盘。</p>
+                    <p className="mt-3 text-sm text-slate-400">暂未生成 AI 复盘</p>
                   )}
                 </section>
 
@@ -1620,7 +1616,7 @@ export function CommandCenterTab({
                     disabled={settlementActionLoading != null}
                   >
                     <p className="text-sm font-medium text-[var(--edp-brand-strong)]">🌱 保持节奏 (Renew)</p>
-                    <p className="mt-1 text-xs text-slate-600">沿用当前规则，从今天开始续期开启下一周期。</p>
+                    <p className="mt-1 text-xs text-slate-600">沿用当前规则，从今天开始续期开启下一周期</p>
                   </button>
 
                   <button
@@ -1634,7 +1630,7 @@ export function CommandCenterTab({
                     disabled={settlementActionLoading != null}
                   >
                     <p className="text-sm font-medium text-slate-900">🔥 强度进阶 (Evolve)</p>
-                    <p className="mt-1 text-xs text-slate-600">打开属性编辑并默认展开高级周期设置，升级下一阶段规则。</p>
+                    <p className="mt-1 text-xs text-slate-600">打开属性编辑并默认展开高级周期设置，升级下一阶段规则</p>
                   </button>
 
                   <button
@@ -1648,7 +1644,7 @@ export function CommandCenterTab({
                     disabled={settlementActionLoading != null}
                   >
                     <p className="text-sm font-medium text-rose-700">🎓 荣耀毕业 (Archive)</p>
-                    <p className="mt-1 text-xs text-slate-600">结束本段旅程并归档，历史记录会继续保留在统计视图中。</p>
+                    <p className="mt-1 text-xs text-slate-600">结束本段旅程并归档，历史记录会继续保留在统计视图中</p>
                   </button>
 
                   <p className="text-[11px] text-slate-500">推荐原因：{settlementReport.recommendation_reason}</p>

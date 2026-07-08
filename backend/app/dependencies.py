@@ -7,12 +7,15 @@ from app.learning_knowledge.loader import KnowledgeBase
 from app.repositories.focus_repository import FocusRepository
 from app.repositories.home_repository import HomeRepository
 from app.repositories.learning_repository import LearningRepository
+from app.repositories.plan_repository import PlanRepository
 from app.repositories.record_repository import RecordRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.todo_repository import TodoRepository
+from app.repositories.time_ledger_repository import TimeLedgerRepository
 from app.services.ai_settings_service import AiSettingsService
 from app.services.ai_summary_service import AiSummaryService
 from app.services.learning_agent_service import LearningAgentService
+from app.services.plan_service import PlanService
 from app.services import FocusService, RecordService, TaskService, TodoService
 from app.services.home_service import HomeService
 
@@ -62,9 +65,21 @@ def get_todo_service(db: Database = Depends(get_db)) -> TodoService:
 
 def get_focus_service(db: Database = Depends(get_db)) -> FocusService:
     task_repo = TaskRepository(db)
-    return FocusService(FocusRepository(db), task_repo)
+    return FocusService(FocusRepository(db), task_repo, TimeLedgerRepository(db))
 
 
 def get_home_service(db: Database = Depends(get_db)) -> HomeService:
     task_repo = TaskRepository(db)
-    return HomeService(HomeRepository(db), task_repo)
+    return HomeService(HomeRepository(db), task_repo, TimeLedgerRepository(db))
+
+
+def get_plan_service(
+    db: Database = Depends(get_db),
+    ai_settings_service: AiSettingsService = Depends(get_ai_settings_service),
+) -> PlanService:
+    return PlanService(
+        PlanRepository(db),
+        ai_settings_service,
+        TaskRepository(db),
+        TimeLedgerRepository(db),
+    )

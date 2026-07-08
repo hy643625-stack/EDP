@@ -53,8 +53,14 @@ export interface FocusSession {
   task_id: number
   task_name: string | null
   task_color: string | null
+  attr_id?: number | null
+  attr_name?: string | null
   start_time: string
+  record_date?: string | null
   duration_seconds: number
+  source_type?: string
+  source_id?: string | null
+  note?: string
   created_at: string
 }
 
@@ -146,8 +152,13 @@ export type CreateTodoInput = {
 
 export type CreateFocusSessionInput = {
   task_id: number
+  attr_id?: number
   start_time: string
+  record_date?: string
   duration_seconds: number
+  plan_id?: string
+  step_id?: string
+  note?: string
 }
 
 export type CreateTaskAttrInput = {

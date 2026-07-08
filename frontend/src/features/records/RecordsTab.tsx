@@ -879,7 +879,7 @@ export function RecordsTab({
             <div className="rounded-2xl border border-amber-300 bg-amber-50/70 p-3 sm:p-4">
               <div className="mb-2">
                 <p className="text-xs font-semibold tracking-wide text-amber-700">待结算属性</p>
-                <p className="mt-1 text-xs text-amber-800/90">检测到已有周期结束的属性，请先完成结算再继续日常记录。</p>
+                <p className="mt-1 text-xs text-amber-800/90">检测到已有周期结束的属性，请先完成结算再继续日常记录</p>
               </div>
               <ul className="space-y-2">
                 {pendingReviewAttrs.map((item) => (
@@ -1333,7 +1333,7 @@ export function RecordsTab({
             <div className="mb-3">
               <p className="text-sm font-semibold text-slate-900">周期结算</p>
               <p className="mt-1 text-xs text-slate-500">
-                属性「{settlementAttr.attr_name}」已到周期终点。请选择下一步操作。
+                属性「{settlementAttr.attr_name}」已到周期终点请选择下一步操作
               </p>
             </div>
             <div className="space-y-2">
@@ -1344,7 +1344,7 @@ export function RecordsTab({
                 disabled={settlementActionLoading != null}
               >
                 <p className="text-sm font-medium text-[var(--edp-brand-strong)]">一键续期 (Renew)</p>
-                <p className="mt-1 text-xs text-slate-600">保留原有周期规则，从今天开始自动顺延一个周期。</p>
+                <p className="mt-1 text-xs text-slate-600">保留原有周期规则，从今天开始自动顺延一个周期</p>
               </button>
 
               <button
@@ -1354,7 +1354,7 @@ export function RecordsTab({
                 disabled={settlementActionLoading != null}
               >
                 <p className="text-sm font-medium text-slate-900">进入修改 (Evolve)</p>
-                <p className="mt-1 text-xs text-slate-600">打开属性编辑表单，手动调整目标值和时间规则。</p>
+                <p className="mt-1 text-xs text-slate-600">打开属性编辑表单，手动调整目标值和时间规则</p>
               </button>
 
               <button
@@ -1364,7 +1364,7 @@ export function RecordsTab({
                 disabled={settlementActionLoading != null}
               >
                 <p className="text-sm font-medium text-rose-700">荣耀归档 (Archive)</p>
-                <p className="mt-1 text-xs text-slate-600">归档后不再参与日常记录，但历史数据仍保留在统计视图。</p>
+                <p className="mt-1 text-xs text-slate-600">归档后不再参与日常记录，但历史数据仍保留在统计视图</p>
               </button>
             </div>
             <div className="mt-3 flex justify-end">

@@ -2,7 +2,8 @@ import dayjs from 'dayjs'
 import { AlarmClockPlus, Play, Square } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 
-import type { FocusSession, Task } from '../../../../packages/core/src/types'
+import type { FocusSession, Task, TaskAttrRelation } from '../../../../packages/core/src/types'
+import type { PlanTimeContext } from '@/features/plans/PlansTab'
 import { formatDuration, todayDateString } from '@/lib/format'
 import { Button, Card, CardContent, CardHeader, CardTitle, SegmentedTabs, type SegmentedTabItem } from '../../../../packages/ui/src'
 
@@ -19,15 +20,27 @@ type TimeTabProps = {
   isGlobalScope: boolean
   currentTaskId: number | null
   tasks: Task[]
+  attrs: TaskAttrRelation[]
   scopeTaskId: number
+  timerAttrId: number | null
+  planContext: PlanTimeContext | null
   currentTaskName?: string
   focusSessions: FocusSession[]
   onScopeTaskIdChange: (taskId: number) => void
+  onTimerAttrIdChange: (attrId: number | null) => void
+  onClearPlanContext: () => void
   onTimerModeChange: (mode: TimerMode) => void
   onCountdownMinutesChange: (minutes: number) => void
   onStartTimer: () => Promise<void>
   onStopTimer: (manualStop: boolean) => Promise<void>
-  onCreateManualSession: (input: { taskId: number; startTime: string; durationSeconds: number }) => Promise<void>
+  onCreateManualSession: (input: {
+    taskId: number
+    attrId?: number
+    startTime: string
+    recordDate: string
+    durationSeconds: number
+    planContext?: PlanTimeContext | null
+  }) => Promise<void>
   displayClock: (seconds: number) => string
 }
 
@@ -42,10 +55,15 @@ export function TimeTab({
   isGlobalScope,
   currentTaskId,
   tasks,
+  attrs,
   scopeTaskId,
+  timerAttrId,
+  planContext,
   currentTaskName,
   focusSessions,
   onScopeTaskIdChange,
+  onTimerAttrIdChange,
+  onClearPlanContext,
   onTimerModeChange,
   onCountdownMinutesChange,
   onStartTimer,
@@ -65,6 +83,16 @@ export function TimeTab({
   const [manualSubmitting, setManualSubmitting] = useState(false)
 
   const taskOptions = useMemo(() => tasks.filter((task) => task.task_id !== 1), [tasks])
+  const timerAttrs = useMemo(() => attrs.filter((attr) => {
+    try {
+      const parsed = JSON.parse(attr.calc_config || '{}') as Record<string, unknown>
+      const schedule = (parsed.schedule_config && typeof parsed.schedule_config === 'object' ? parsed.schedule_config : parsed) as Record<string, unknown>
+      const ux = schedule.ux_config && typeof schedule.ux_config === 'object' ? schedule.ux_config as Record<string, unknown> : null
+      return ux?.input_type === 'timer'
+    } catch {
+      return false
+    }
+  }), [attrs])
   const safeStartHour = Math.max(0, Math.min(23, timelineStartHour))
   const safeEndHour = Math.max(safeStartHour + 1, Math.min(24, timelineEndHour))
   const hourSpan = safeEndHour - safeStartHour
@@ -136,7 +164,7 @@ export function TimeTab({
         leftPct,
         widthPct: Math.max(rawWidthPct, 1),
         durationSeconds: Math.round(clippedMs / 1000),
-        label: `${dayjs(session.start_time).format('HH:mm')} · ${formatDuration(Math.round(clippedMs / 1000))}`,
+        label: `${dayjs(session.start_time).format('HH:mm')} · ${formatDuration(Math.round(clippedMs / 1000))}${session.attr_name ? ` · ${session.attr_name}` : ''}${session.note ? ` · ${session.note}` : ''}`,
         startAt: sessionStart.valueOf()
       })
       grouped.set(session.task_id, existing)
@@ -176,8 +204,11 @@ export function TimeTab({
     try {
       await onCreateManualSession({
         taskId: manualTaskId,
+        attrId: manualTaskId === scopeTaskId ? timerAttrId ?? undefined : undefined,
         startTime: start.toISOString(),
-        durationSeconds
+        recordDate: manualDate,
+        durationSeconds,
+        planContext: manualTaskId === scopeTaskId ? planContext : null
       })
       setManualOpen(false)
     } finally {
@@ -238,6 +269,25 @@ export function TimeTab({
         </CardHeader>
         <CardContent className="space-y-4">
           <SegmentedTabs className="w-fit" compact tabs={timerModeTabs} value={timerMode} onChange={onTimerModeChange} />
+
+          {planContext ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+              <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-semibold text-blue-800">来自 Plan：{planContext.planTitle}</p><p className="mt-1 text-[11px] text-blue-700">{planContext.stepTitle}</p></div><button type="button" className="text-[11px] font-medium text-blue-600" onClick={onClearPlanContext} disabled={timerRunning}>清除</button></div>
+            </div>
+          ) : null}
+
+          {!isGlobalScope ? (
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-slate-500">计时属性</span>
+              <select className="input-clean w-full" value={timerAttrId ?? ''} onChange={(event) => {
+                onTimerAttrIdChange(event.target.value ? Number(event.target.value) : null)
+                if (planContext && Number(event.target.value) !== planContext.attrId) onClearPlanContext()
+              }} disabled={timerRunning}>
+                <option value="">仅记录任务专注时长</option>
+                {timerAttrs.map((attr) => <option key={attr.attr_id} value={attr.attr_id}>{attr.attr_name}</option>)}
+              </select>
+            </label>
+          ) : null}
 
           {timerMode === 'countdown' ? (
             <div>
@@ -302,7 +352,7 @@ export function TimeTab({
                 >
                   {Array.from({ length: 24 }, (_, index) => (
                     <option key={index} value={index}>
-                      {`${`${index}`.padStart(2, '0')}:00`}
+                        {String(index).padStart(2, '0')}
                     </option>
                   ))}
                 </select>
@@ -316,7 +366,7 @@ export function TimeTab({
                 >
                   {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => (
                     <option key={hour} value={hour}>
-                      {`${`${hour}`.padStart(2, '0')}:00`}
+                      {String(hour).padStart(2, '0')}
                     </option>
                   ))}
                 </select>
@@ -328,14 +378,14 @@ export function TimeTab({
           <p className="text-xs text-slate-500">
             共 {timelineRows.length} 条任务轨道，当前窗口累计 {formatDuration(totalVisibleDuration)}
           </p>
-          <div className="grid grid-cols-[90px_1fr] items-end gap-3 px-1">
+          <div className="grid grid-cols-[minmax(100px,auto)_1fr] items-end gap-3 px-1">
             <span className="text-[11px] font-medium tracking-wide text-slate-400">任务</span>
             <div className="relative h-5">
               {hourLabels.map((hour, index) => {
                 const left = (index / hourSpan) * 100
                 return (
                   <span key={hour} className="absolute -translate-x-1/2 text-[11px] text-slate-400" style={{ left: `${left}%` }}>
-                    {`${`${hour}`.padStart(2, '0')}:00`}
+                    {String(hour).padStart(2, '0')}
                   </span>
                 )
               })}
@@ -349,7 +399,7 @@ export function TimeTab({
           ) : (
             <div className="space-y-2">
               {timelineRows.map((row) => (
-                <div key={row.taskId} className="grid grid-cols-[90px_1fr] items-center gap-3">
+                <div key={row.taskId} className="grid grid-cols-[minmax(100px,auto)_1fr] items-center gap-3">
                   <div className="truncate text-xs font-medium text-slate-600" title={row.taskName}>
                     {row.taskName}
                   </div>

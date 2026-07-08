@@ -80,14 +80,14 @@ export function AiSettingsModal({
       >
         <div className="mb-4 space-y-1">
           <h3 className="text-lg font-semibold text-slate-900">AI 设置</h3>
-          <p className="text-sm text-slate-500">AI 助手是可选模块。即使没有配置任何模型，系统也会继续使用本地规则算法。</p>
+          <p className="text-sm text-slate-500">AI 助手是可选模块即使没有配置任何模型，系统也会继续使用本地规则算法</p>
         </div>
 
         <div className="space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2">
               <h4 className="text-sm font-semibold text-slate-900">AI 模式</h4>
-              <p className="mt-1 text-xs text-slate-500">默认关闭云端 AI；失败、超时或配置异常时自动降级到本地规则算法。</p>
+              <p className="mt-1 text-xs text-slate-500">默认关闭云端 AI；失败、超时或配置异常时自动降级到本地规则算法</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {modeOptions.map((item) => {
@@ -115,7 +115,7 @@ export function AiSettingsModal({
             <section className="rounded-2xl border border-slate-200 bg-white p-3">
               <div className="mb-3 space-y-1">
                 <h4 className="text-sm font-semibold text-slate-900">AI 服务商</h4>
-                <p className="text-xs text-slate-500">服务商列表来自后端目录配置，可继续扩展，不需要把逻辑写死在界面中。</p>
+                <p className="text-xs text-slate-500">服务商列表来自后端目录配置，可继续扩展，不需要把逻辑写死在界面中</p>
               </div>
               <select
                 className="input-clean w-full"

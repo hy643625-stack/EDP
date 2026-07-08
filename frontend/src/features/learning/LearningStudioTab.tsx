@@ -109,7 +109,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
       setWorkbench(payload)
       const draft = loadLearningStudioDraft()
       setCourseId(draft?.course_id || payload.courses[0]?.course_id || '')
-      setConversation(draft?.conversation || '我正在准备这门课，希望系统根据我的基础、时间和目标，为我生成更适合我的学习资源与学习路径。')
+      setConversation(draft?.conversation || '我正在准备这门课，希望系统根据我的基础、时间和目标，为我生成更适合我的学习资源与学习路径')
       setPreferredGoal(draft?.preferred_goal || '')
       setWeeklyDays(draft?.weekly_days || 4)
       setDailyMinutes(draft?.daily_minutes || 50)
@@ -130,7 +130,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
 
   // ── API handlers ──
   async function handleBuildProfile() {
-    if (!courseId || !conversation.trim()) { setError('请先选择课程并输入学习描述。'); return }
+    if (!courseId || !conversation.trim()) { setError('请先选择课程并输入学习描述'); return }
     setBuildingProfile(true)
     try {
       const result = await api.createLearningSession({
@@ -154,7 +154,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
   }
 
   async function handleGeneratePackage() {
-    if (!courseId || !conversation.trim()) { setError('请先填写学习描述，再生成资源包。'); return }
+    if (!courseId || !conversation.trim()) { setError('请先填写学习描述，再生成资源包'); return }
     setBuildingPackage(true)
     try {
       let payload: LearningResourcePackagePayload
@@ -238,7 +238,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle className="inline-flex items-center gap-2 text-base"><GraduationCap className="h-4 w-4 text-[var(--edp-brand-strong)]" />学习智能体工作台</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">基于学习画像、多智能体资源生成和学习路径规划。</p>
+            <p className="mt-1 text-sm text-slate-500">基于学习画像、多智能体资源生成和学习路径规划</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="ghost" iconLeft={<Bot className="h-4 w-4" />} onClick={onOpenAiSettings}>AI 设置</Button>
@@ -267,7 +267,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
             </div>
             <label className="space-y-1"><span className="text-xs font-medium text-slate-600">学习描述</span>
               <textarea className="input-clean min-h-[140px] w-full resize-y" value={conversation} onChange={e => setConversation(e.target.value)}
-                placeholder="描述你的基础、目标、时间、困难点、喜欢的学习方式。" />
+                placeholder="描述你的基础、目标、时间、困难点、喜欢的学习方式" />
             </label>
             <div className="flex flex-wrap gap-2">
               <Button iconLeft={<BrainCircuit className="h-4 w-4" />} onClick={() => void handleBuildProfile()} disabled={buildingProfile || loadingWorkbench}>
@@ -402,7 +402,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
                   <span className="text-sm font-medium text-indigo-700">智能辅导</span>
                 </div>
                 {!sessionId ? (
-                  <p className="text-xs text-slate-500">请先点击「构建学习画像」创建会话后使用智能辅导。</p>
+                  <p className="text-xs text-slate-500">请先点击「构建学习画像」创建会话后使用智能辅导</p>
                 ) : (
                   <>
                     <div className="flex gap-2">
@@ -505,7 +505,7 @@ export function LearningStudioTab({ onOpenAiSettings }: LearningStudioTabProps) 
               ) : null}
               {isInteractiveType && !hasInteraction ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                  当前资源包未包含交互数据，可能是旧缓存或旧版本生成的内容，请重新生成资源包后再查看交互。
+                  当前资源包未包含交互数据，可能是旧缓存或旧版本生成的内容，请重新生成资源包后再查看交互
                 </div>
               ) : null}
               {hasInteraction === 'practice_pack' ? <InteractivePracticePanel resource={r} /> :

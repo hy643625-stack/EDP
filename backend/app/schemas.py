@@ -90,6 +90,54 @@ class FocusCaptureRequest(BaseModel):
     record_date: date
 
 
+class PlanTaskBindingRequest(BaseModel):
+    mode: str = Field(default="create", min_length=1, max_length=16)
+    task_name: str | None = Field(default=None, max_length=64)
+    task_id: int | None = None
+
+
+class ImportPlanRequest(BaseModel):
+    source_text: str = Field(min_length=1, max_length=100_000)
+    title: str = Field(default="", max_length=120)
+    goal: str = Field(default="", max_length=500)
+    start_date: date
+    target_end_date: date
+    preferred_weekdays: list[int] = Field(min_length=1)
+    daily_minutes: int = Field(ge=15, le=480)
+    task_binding: PlanTaskBindingRequest = Field(default_factory=PlanTaskBindingRequest)
+
+
+class UpdatePlanDraftRequest(BaseModel):
+    snapshot: dict[str, Any]
+
+
+class UpdatePlanStatusRequest(BaseModel):
+    status: str = Field(min_length=1, max_length=16)
+
+
+class PlanTimeLogRequest(BaseModel):
+    step_id: str = Field(min_length=1, max_length=120)
+    start_time: datetime
+    duration_seconds: int = Field(gt=0, le=86_400)
+    source: str = Field(default="timer", min_length=1, max_length=16)
+    note: str = Field(default="", max_length=500)
+    record_date: date | None = None
+
+
+class CompletePlanStepRequest(BaseModel):
+    actual_minutes: int = Field(default=0, ge=0, le=1_440)
+    time_note: str = Field(default="", max_length=500)
+    evidence_text: str = Field(default="", max_length=2_000)
+    evidence_url: str = Field(default="", max_length=1_000)
+
+
+class PlanReviewRequest(BaseModel):
+    review_date: date
+    summary: str = Field(default="", max_length=2_000)
+    blockers: str = Field(default="", max_length=2_000)
+    next_week_minutes: int | None = Field(default=None, ge=15, le=480)
+
+
 class CreateTodoRequest(BaseModel):
     task_id: int = 0
     title: str = Field(min_length=1, max_length=200)
@@ -106,8 +154,13 @@ class UpdateTodoRequest(BaseModel):
 
 class CreateFocusSessionRequest(BaseModel):
     task_id: int
+    attr_id: int | None = None
     start_time: datetime
+    record_date: date | None = None
     duration_seconds: int = Field(gt=0)
+    plan_id: str | None = Field(default=None, max_length=120)
+    step_id: str | None = Field(default=None, max_length=120)
+    note: str = Field(default="", max_length=500)
 
 
 class AiProviderConfigRequest(BaseModel):

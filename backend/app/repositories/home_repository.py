@@ -136,7 +136,7 @@ class HomeRepository:
             params.extend(in_params)
 
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        today_where = f"{where_sql} {'AND' if where_sql else 'WHERE'} DATE(start_time) = ?"
+        today_where = f"{where_sql} {'AND' if where_sql else 'WHERE'} record_date = ?"
         with self.db.session() as conn:
             total_seconds = conn.execute(
                 f"""

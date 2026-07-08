@@ -69,7 +69,7 @@ function RuntimeIssuePanel({ issue }: { issue: RuntimeIssue }) {
     <div className="mx-auto mt-6 w-full max-w-2xl rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
       <p className="text-sm font-semibold">{issue.title}</p>
       <p className="mt-2 break-all text-xs">{issue.detail}</p>
-      <p className="mt-3 text-xs text-rose-700">请截图此页面并发送，同时可复制诊断信息。</p>
+      <p className="mt-3 text-xs text-rose-700">请截图此页面并发送，同时可复制诊断信息</p>
       <div className="mt-3 flex items-center gap-2">
         <button
           type="button"

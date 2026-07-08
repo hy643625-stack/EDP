@@ -40,10 +40,10 @@ class FocusRepository:
             clauses.append("fs.task_id = ?")
             params.append(task_id)
         if start_date:
-            clauses.append("DATE(fs.start_time) >= ?")
+            clauses.append("fs.record_date >= ?")
             params.append(start_date)
         if end_date:
-            clauses.append("DATE(fs.start_time) <= ?")
+            clauses.append("fs.record_date <= ?")
             params.append(end_date)
 
         where_sql = ""
@@ -58,11 +58,18 @@ class FocusRepository:
                     fs.task_id,
                     tm.task_name,
                     tm.task_color,
+                    fs.attr_id,
+                    ta.attr_name,
                     fs.start_time,
+                    fs.record_date,
                     fs.duration_seconds,
+                    fs.source_type,
+                    fs.source_id,
+                    fs.note,
                     fs.created_at
                 FROM focus_sessions fs
                 LEFT JOIN task_main tm ON tm.task_id = fs.task_id
+                LEFT JOIN task_attr ta ON ta.attr_id = fs.attr_id
                 {where_sql}
                 ORDER BY fs.start_time ASC
                 """,
@@ -92,7 +99,7 @@ class FocusRepository:
                 tuple(params),
             ).fetchone()["total_seconds"]
 
-            today_where = where_base + (" AND " if where_base else " WHERE ") + "DATE(start_time) = ?"
+            today_where = where_base + (" AND " if where_base else " WHERE ") + "record_date = ?"
             today_params = [*params, target_date]
             today_seconds = conn.execute(
                 f"""

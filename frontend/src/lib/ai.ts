@@ -47,7 +47,7 @@ export function buildAiSummaryClipboardText(summary: AiSummaryPayload): string {
     lines.push('', `运行状态：${summary.runtime_message}`)
   }
   if (summary.confirmation_required) {
-    lines.push('', '提示：所有 AI 建议都需要人工确认后，才会进入真实数据或配置修改。')
+    lines.push('', '提示：所有 AI 建议都需要人工确认后，才会进入真实数据或配置修改')
   }
 
   return lines.join('\n')
@@ -89,7 +89,7 @@ export function buildAiSummaryMarkdown(summary: AiSummaryPayload): string {
     lines.push('', '## 运行状态', '', summary.runtime_message)
   }
   if (summary.confirmation_required) {
-    lines.push('', '## 提示', '', '所有 AI 建议都需要人工确认后，才会进入真实数据或配置修改。')
+    lines.push('', '## 提示', '', '所有 AI 建议都需要人工确认后，才会进入真实数据或配置修改')
   }
 
   return lines.join('\n')

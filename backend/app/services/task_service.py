@@ -36,6 +36,8 @@ class TaskService:
     def delete_task(self, task_id: int) -> None:
         if task_id == 1:
             raise ApiError("BAD_REQUEST", "总览任务不能删除", 400)
+        if self.repo.task_has_plan(task_id):
+            raise ApiError("BAD_REQUEST", "该任务已绑定长期计划，请先处理计划绑定", 409)
         deleted = self.repo.delete_task(task_id)
         if not deleted:
             raise ApiError("NOT_FOUND", "任务不存在", 404)

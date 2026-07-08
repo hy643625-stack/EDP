@@ -26,6 +26,7 @@ def call_llm(
     system_prompt: str,
     user_prompt: str,
     max_tokens: int = 800,
+    timeout_seconds: int | None = None,
 ) -> str | None:
     """Call the configured AI provider. Returns response text or None on failure."""
     try:
@@ -40,8 +41,13 @@ def call_llm(
     base_url = str(config.get("base_url", "")).rstrip("/")
     model = str(config.get("model_name", ""))
     api_key = str(config.get("api_key", ""))
-    # Use a generous timeout; SSE keeps connections alive via heartbeats
-    timeout = max(int(config.get("timeout_seconds", 30)), 300)
+    # Most existing callers allow a long model response. Interactive flows can
+    # provide a tighter budget so their local fallback runs before the UI times out.
+    timeout = (
+        max(int(config.get("timeout_seconds", 30)), 300)
+        if timeout_seconds is None
+        else max(1, int(timeout_seconds))
+    )
 
     if not base_url or not model:
         _logger.warning("LLM call skipped: missing base_url or model_name")

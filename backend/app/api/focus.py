@@ -18,8 +18,13 @@ def create_session(
     item = service.create_session(
         {
             "task_id": payload.task_id,
+            "attr_id": payload.attr_id,
             "start_time": payload.start_time.isoformat(),
+            "record_date": payload.record_date.isoformat() if payload.record_date else None,
             "duration_seconds": payload.duration_seconds,
+            "plan_id": payload.plan_id,
+            "step_id": payload.step_id,
+            "note": payload.note,
         }
     )
     return success(item)
