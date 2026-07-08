@@ -383,7 +383,7 @@ class LearningAgentService:
         latest_raw = self.repo.get_latest_package(session_id)
         if latest_raw is None:
             return {
-                "answer_markdown": "尚未生成资源包，请先生成资源包后再提问。",
+                "answer_markdown": "尚未生成资源包，请先生成资源包后再提问",
                 "related_resources": [],
                 "source_refs": [],
                 "confidence": 0.0,
