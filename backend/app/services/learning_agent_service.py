@@ -162,7 +162,7 @@ class LearningAgentService:
     def _normalize_conversation(self, conversation: str) -> str:
         normalized = " ".join(conversation.strip().split())
         if len(normalized) < 10:
-            raise ApiError("BAD_REQUEST", "请至少输入一段完整的学习描述，方便系统构建学习画像。", 422)
+            raise ApiError("BAD_REQUEST", "请至少输入一段完整的学习描述，方便系统构建学习画像", 422)
         return normalized
 
     def build_profile(

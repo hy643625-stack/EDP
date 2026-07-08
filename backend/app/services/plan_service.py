@@ -571,7 +571,7 @@ class PlanService:
                     "month_start": item_start,
                     "month_end": item_end,
                     "title": _clean_line(str(raw.get("title") or fallback_title)),
-                    "objective": _clean_line(str(raw.get("objective") or "完成本阶段学习与可验证产出。"), 500),
+                    "objective": _clean_line(str(raw.get("objective") or "完成本阶段学习与可验证产出"), 500),
                     "topics": topics,
                 }
             )
