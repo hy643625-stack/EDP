@@ -483,7 +483,7 @@ class AiSettingsService:
         crypt32 = ctypes.windll.crypt32
         kernel32 = ctypes.windll.kernel32
         if not crypt32.CryptProtectData(ctypes.byref(input_blob), None, None, None, None, 0, ctypes.byref(output_blob)):
-            raise OSError("无法加密 AI 配置密钥。")
+            raise OSError("无法加密 AI 配置密钥")
         try:
             encrypted = ctypes.string_at(output_blob.pbData, output_blob.cbData)
         finally:
